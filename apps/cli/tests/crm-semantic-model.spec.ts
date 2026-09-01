@@ -90,6 +90,18 @@ describe('CRM semantic model', () => {
     expect(JSON.stringify([model.metricCatalog(), model.dimensionCatalog()])).not.toMatch(/private_(amount|customer|order_date|province)/)
   })
 
+  it('does not expose mutable lookup maps through forEach', () => {
+    const config = semanticConfig()
+    const model = resolveSemanticModel(config, datasets)
+    model.metrics.forEach((_definition, _id, map) => {
+      expect(map).toBe(model.metrics)
+      expect('set' in map).toBe(false)
+    })
+
+    expect(model.metrics.has('tampered')).toBe(false)
+    expect(JSON.stringify(model.metricCatalog())).not.toContain('tampered')
+  })
+
   it.each([
     ['metric', (config: SemanticConfig) => { config.metrics.push({ ...metric(config, 'sales_amount') }) }, /Duplicate metric id/],
     ['dimension', (config: SemanticConfig) => { config.dimensions.push({ ...config.dimensions[0]! }) }, /Duplicate dimension id/],
@@ -133,6 +145,15 @@ describe('CRM semantic model', () => {
     config.metrics[0] = { ...sumMetric(config, 'sales_amount'), dataset: 'items', field: 'amount' }
 
     expect(() => resolveSemanticModel(config, datasets)).toThrow(/Incompatible metric dependency datasets/)
+  })
+
+  it('rejects ratios that depend on unavailable metrics', () => {
+    const config = semanticConfig()
+    config.metrics.push({ id: 'repeat_purchase', name: '复购', dataset: 'facts', kind: 'unavailable', format: 'number',
+      description: 'Repeat purchase.', limitations: ['The configured source has no repeat-purchase definition.'] })
+    config.metrics[4] = { ...ratioMetric(config, 'atv'), dependencies: ['sales_amount', 'repeat_purchase'] }
+
+    expect(() => resolveSemanticModel(config, datasets)).toThrow(/Unavailable metric dependency/)
   })
 
   it.each(limitCases)('rejects invalid %s', (key, value) => {

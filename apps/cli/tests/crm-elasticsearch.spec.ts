@@ -54,6 +54,26 @@ async function fixture(handler: (...args: Parameters<RequestListener>) => unknow
 }
 
 describe('CRM Elasticsearch reader', () => {
+  it('rejects unknown semantic metric kinds during plugin configuration', async () => {
+    const ctx = new Context()
+    ctx.provide('connection', { fetch: { register: () => () => {} } } as never)
+    const previousUser = process.env.TEST_USER, previousPassword = process.env.TEST_PASSWORD
+    Object.assign(process.env, env)
+    try {
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      const invalid = { ...config, semantic: { ...config.semantic, metrics: [
+        { ...config.semantic.metrics[0]!, kind: 'average' },
+      ] } }
+      const load = async () => { await ctx.plugin(CrmTools, invalid) }
+      await expect(load()).rejects.toThrow(/Unknown metric kind/)
+    } finally {
+      if (previousUser === undefined) delete process.env.TEST_USER; else process.env.TEST_USER = previousUser
+      if (previousPassword === undefined) delete process.env.TEST_PASSWORD; else process.env.TEST_PASSWORD = previousPassword
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('registers scoped tools and runs a canonical result through the actual tool runtime', async () => {
     const endpoint = await fixture((_req, res) => res.end(JSON.stringify(response({
       amount: { count: 3, sum: 120, avg: 40, min: 10, max: 70 },

@@ -86,6 +86,7 @@ export interface ResolvedSemanticModel {
 }
 
 const metricFormats = new Set<MetricFormat>(['currency', 'number', 'decimal'])
+const metricKinds = new Set<string>(['sum', 'count', 'distinct_count', 'ratio', 'unavailable'])
 const timeGrains = new Set<TimeGrain>(['day', 'week', 'month'])
 const dimensionFilters = new Set<DimensionFilter>(['equals', 'in'])
 const id = /^[a-z][a-z0-9_]*$/
@@ -125,6 +126,8 @@ function validateMetricField(definition: SumMetricDefinition | DistinctCountMetr
 }
 
 function validateMetric(definition: MetricDefinition, datasets: Record<string, Dataset>): void {
+  const kind = definition.kind as string
+  if (!metricKinds.has(kind)) throw new Error(`Unknown metric kind ${kind}`)
   validateCommon(definition)
   if (!Object.hasOwn(datasets, definition.dataset)) throw new Error(`Unknown metric dataset ${definition.dataset}`)
   switch (definition.kind) {
@@ -136,6 +139,7 @@ function validateMetric(definition: MetricDefinition, datasets: Record<string, D
         || definition.dependencies.some(dependency => !id.test(dependency))) throw new Error('Ratio requires two metric dependencies')
       break
     case 'unavailable': break
+    default: throw new Error(`Unknown metric kind ${kind}`)
   }
 }
 
@@ -169,6 +173,7 @@ function validateDependencies(metrics: ReadonlyMap<string, MetricDefinition>): v
     for (const dependency of dependencies(definition)) {
       const target = metrics.get(dependency)
       if (!target) throw new Error(`Unknown metric dependency ${dependency}`)
+      if (target.kind === 'unavailable') throw new Error(`Unavailable metric dependency ${dependency}`)
       if (target.dataset !== definition.dataset) throw new Error('Incompatible metric dependency datasets')
     }
   }
@@ -199,11 +204,16 @@ function freezeDimension(definition: DimensionDefinition): DimensionDefinition {
 
 function immutableMap<T>(entries: readonly (readonly [string, T])[]): ReadonlyMap<string, T> {
   const values = new Map(entries)
-  return Object.freeze({
+  const result: ReadonlyMap<string, T> = {
     get size() { return values.size },
     has: values.has.bind(values), get: values.get.bind(values), entries: values.entries.bind(values), keys: values.keys.bind(values),
-    values: values.values.bind(values), forEach: values.forEach.bind(values), [Symbol.iterator]: values[Symbol.iterator].bind(values),
-  })
+    values: values.values.bind(values),
+    forEach(callbackfn, thisArg) {
+      values.forEach((value, key) => { callbackfn.call(thisArg, value, key, result) })
+    },
+    [Symbol.iterator]: values[Symbol.iterator].bind(values),
+  }
+  return Object.freeze(result)
 }
 
 function catalogMetric(definition: MetricDefinition): JsonValue {
@@ -222,6 +232,7 @@ function catalogDimension(definition: DimensionDefinition): JsonValue {
  * @param config Explicit semantic definitions and limits.
  * @param datasets Logical dataset mappings from the Elasticsearch configuration.
  * @returns Model-safe semantic catalog and immutable internal lookups.
+ * @throws {Error} When definitions, dependencies, logical mappings, or limits are invalid.
  */
 export function resolveSemanticModel(config: SemanticConfig, datasets: Record<string, Dataset>): ResolvedSemanticModel {
   for (const key of ['maxSelectedMetrics', 'maxDimensions', 'maxFilters', 'maxTopN'] as const) {
