@@ -2155,6 +2155,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-crm CrmRow key \'crm_query\'',
       'client-ui-crm CrmReportRow',
+      'client-ui-crm CrmAnalysisRow',
       'client-ui-skill SkillRow key \'skill\'',
       'client-ui-tool AskQuestionRow key \'ask_user_question\'',
       'client-ui-tool BashRow key \'bash\'',

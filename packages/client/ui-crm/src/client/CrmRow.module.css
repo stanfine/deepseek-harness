@@ -13,6 +13,8 @@
 .metrics > div { padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .metrics dt { color: var(--dsw-alias-label-secondary); }
 .metrics dd { margin: 8px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metrics small { display: block; margin-top: 6px; color: var(--dsw-alias-label-secondary); }
+.metricNote { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .chart { width: 100%; height: 340px; min-width: 0; margin: 12px 0; }
 .warning { color: var(--dsw-alias-label-primary); border-left: 3px solid var(--dsw-alias-label-secondary); padding-left: 12px; }
 .tableWrap { overflow: auto; max-height: 260px; }
@@ -24,3 +26,9 @@
 .downloadPanel { display: grid; gap: 10px; justify-items: start; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .download { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; padding: 8px 12px; text-decoration: none; }
 .card button:focus-visible, .card select:focus-visible, .card summary:focus-visible, .card a:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .card { padding: 12px; }
+  .metrics { grid-template-columns: 1fr; }
+  .chart { height: 280px; }
+  .tableWrap { max-height: 340px; }
+}

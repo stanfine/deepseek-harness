@@ -15,6 +15,7 @@ it('registers CRM only and removes its slot and dictionaries on disposal', async
     await fiber
     expect(slots.entries('tool.call.toolview').map(entry => entry.options.key)).toEqual([
       'crm_query', 'crm_report_periods', 'crm_sales_report', 'crm_lifecycle_report', 'crm_product_report', 'crm_export_weekly_excel',
+      'crm_analyze', 'crm_drilldown',
     ])
     await fiber.dispose()
     expect(slots.entries('tool.call.toolview')).toHaveLength(0)
