@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-crm-read-only-agent.md
-2026-08-31-crm-read-only-agent.md: ba863569788310866410ae8affe6a620e017605a
-2026-08-31-crm-read-only-agent.zh.md: 276ec9e2b8383c89feda985df0efb69e08b41be3
+2026-08-31-crm-read-only-agent.md: cd2c609c53092e9f5da1ae060f4fb346ab4cd526
+2026-08-31-crm-read-only-agent.zh.md: 652ae10350b600364869b41c284bab306b7e12b1

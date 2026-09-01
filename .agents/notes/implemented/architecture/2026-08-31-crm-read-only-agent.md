@@ -22,7 +22,7 @@ The reader rejects incomplete responses and exhausted exact-count budgets. Group
 
 ## Consequences
 
-The example is source-only and deliberately narrower than general business intelligence. MongoDB, normalized item analytics, cohort queries and point-in-time consistency require additional explicit capabilities. A fixed weekly Excel exporter can now serialize completed aggregate report sections and evidence-bound recommendations through a deployment-provided artifact tool; it does not accept arbitrary queries, paths, formulas or customer records. Configured HTTP is available for trusted test environments, but does not protect credentials in transit. Unit tests exercise transport limits, projection, canonical tool results and disposal; the keyless CRM session fixture pins logged tool behavior through the shipped headless profile.
+The example is source-only and deliberately narrower than general business intelligence. MongoDB, normalized item analytics, cohort queries and point-in-time consistency require additional explicit capabilities. A fixed weekly Excel exporter serializes completed aggregate report sections and evidence-bound recommendations through a deployment-provided artifact tool; it does not accept arbitrary queries, paths, formulas or customer records. Configured HTTP is available for trusted test environments, but does not protect credentials in transit. Unit tests exercise transport limits, projection, canonical tool results and disposal; the keyless CRM session fixture pins logged tool behavior through the shipped headless profile.
 
 ## Conversation charts
 
