@@ -1,5 +1,5 @@
 /** Resolve closed CRM aggregate requests into executor-only semantic plans. */
-import { calendarRangeDays, resolveCalendarRange, shiftCalendarRange } from './report-periods.ts'
+import { calendarBucketCount, calendarRangeDays, resolveCalendarRange, shiftCalendarRange } from './report-periods.ts'
 import type {
   DimensionDefinition,
   DimensionFilter,
@@ -230,11 +230,11 @@ export function resolveAnalysisPlan(
     const drilldown = requireDimension(model, request.drilldownDimension)
     if (dimensions.some(dimension => dimension.id === drilldown.id)) throw new Error('Drilldown dimension already selected')
     sameDataset(dataset, drilldown, `dimension ${drilldown.id}`)
-    if (!Array.isArray(request.parentFilters)) throw new Error('Invalid drilldown parent filters')
+    if (!Array.isArray(request.parentFilters) || request.parentFilters.length === 0) throw new Error('Drilldown requires at least one parent filter')
     for (const parent of request.parentFilters) {
-      const dimension = requireDimension(model, parent.dimension)
-      if (!dimensions.some(selected => selected.id === dimension.id)) throw new Error('Drilldown parent dimension must be selected')
-      filters.push({ dimension, operator: 'in', values: Object.freeze(resolveValues(parent.values, 'Drilldown parent filter requires text values')) })
+      const filter = resolveFilter(model, dataset, { dimension: parent.dimension, operator: 'in', values: parent.values })
+      if (!dimensions.some(selected => selected.id === filter.dimension.id)) throw new Error('Drilldown parent dimension must be selected')
+      filters.push(filter)
     }
     if (filters.length > model.limits.maxFilters) throw new Error('Too many filters')
     dimensions.push(drilldown)
@@ -243,6 +243,7 @@ export function resolveAnalysisPlan(
   const limit = request.limit ?? model.limits.maxTopN
   if (!Number.isSafeInteger(limit) || limit <= 0 || limit > model.limits.maxTopN) throw new Error('Invalid analysis limit')
   const timeGrain = resolveTimeGrain(model, dimensions, request.timeGrain, request.intent)
+  if (request.intent === 'trend' && calendarBucketCount(range, timeGrain!) > budgets.maxBuckets) throw new Error('Trend exceeds bucket budget')
   const sort = resolveSort(request.sort, metrics)
   return Object.freeze({ dataset, ...range, metrics: Object.freeze(metrics), ...resolveDerivedMetricOrder(model, metrics),
     dimensions: Object.freeze(dimensions), filters: Object.freeze(filters), ...(comparison === undefined ? {} : { comparison }),

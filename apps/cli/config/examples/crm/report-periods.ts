@@ -21,6 +21,9 @@ export interface CalendarRange {
   end: string
 }
 
+/** Calendar histogram grain used to calculate a bounded trend's bucket count. */
+export type CalendarBucketGrain = 'day' | 'week' | 'month'
+
 function calendarDate(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Expected YYYY-MM-DD date')
   const result = new Date(`${value}T00:00:00Z`)
@@ -30,6 +33,7 @@ function calendarDate(value: string): Date {
 
 function text(value: Date): string { return value.toISOString().slice(0, 10) }
 function shifted(value: Date, days: number): Date { return new Date(value.getTime() + days * 86400000) }
+function assertNever(value: never): never { throw new Error(`Unknown calendar bucket grain ${value}`) }
 function window(start: Date, end: Date, today: Date): ReportWindow {
   return { start: text(start), end: text(end), complete: end.getTime() <= today.getTime() }
 }
@@ -68,6 +72,25 @@ export function resolveCalendarRange(start: string, end: string, maxDays: number
  */
 export function calendarRangeDays(range: CalendarRange): number {
   return (calendarDate(range.end).getTime() - calendarDate(range.start).getTime()) / 86400000
+}
+
+/** Count UTC calendar buckets touched by an inclusive-start, exclusive-end range.
+ * @param range Normalized calendar range.
+ * @param grain Calendar interval used by the histogram.
+ * @returns Positive number of day, Monday-week, or month buckets.
+ */
+export function calendarBucketCount(range: CalendarRange, grain: CalendarBucketGrain): number {
+  const start = calendarDate(range.start)
+  const last = shifted(calendarDate(range.end), -1)
+  switch (grain) {
+    case 'day': return calendarRangeDays(range)
+    case 'week': {
+      const monday = (value: Date) => shifted(value, -((value.getUTCDay() + 6) % 7))
+      return (monday(last).getTime() - monday(start).getTime()) / (7 * 86400000) + 1
+    }
+    case 'month': return (last.getUTCFullYear() - start.getUTCFullYear()) * 12 + last.getUTCMonth() - start.getUTCMonth() + 1
+    default: return assertNever(grain)
+  }
 }
 
 /** Shift a normalized calendar range by whole days without changing its duration.

@@ -19,7 +19,7 @@ const datasets: Record<string, Dataset> = {
   },
 }
 
-function model() {
+function model(change?: (config: SemanticConfig) => void) {
   const config: SemanticConfig = {
     maxSelectedMetrics: 3, maxDimensions: 2, maxFilters: 3, maxTopN: 10, timeGrains: ['day', 'week', 'month'],
     metrics: [
@@ -36,6 +36,7 @@ function model() {
       { id: 'series', name: '系列', dataset: 'items', field: 'series', dataType: 'keyword', filters: ['equals', 'in'], description: 'Series.', limitations: [] },
     ],
   }
+  change?.(config)
   return resolveSemanticModel(config, datasets)
 }
 
@@ -109,8 +110,43 @@ describe('CRM semantic analysis planner', () => {
     ])
   })
 
+  it('rejects drilldown parent values when the parent dimension disallows inclusion filters', () => {
+    const request: DrilldownRequest = {
+      ...base, metrics: ['sales_amount'], dimensions: ['province'], intent: 'ranking', drilldownDimension: 'channel',
+      parentFilters: [{ dimension: 'province', values: ['浙江'] }],
+    }
+
+    expect(() => resolveAnalysisPlan(model((config) => { config.dimensions[1] = { ...config.dimensions[1]!, filters: ['equals'] } }), request, budgets))
+      .toThrow(/Unsupported filter for dimension province/)
+  })
+
+  it('requires a drilldown to constrain at least one selected parent dimension', () => {
+    const request: DrilldownRequest = {
+      ...base, metrics: ['sales_amount'], dimensions: ['province'], intent: 'ranking', drilldownDimension: 'channel', parentFilters: [],
+    }
+
+    expect(() => resolveAnalysisPlan(model(), request, budgets)).toThrow(/Drilldown requires at least one parent filter/)
+  })
+
+  it.each([
+    ['day', '2025-05-01', '2025-06-01', 31, false],
+    ['day', '2025-05-01', '2025-06-02', 31, true],
+    ['week', '2025-05-05', '2025-05-12', 1, false],
+    ['week', '2025-05-05', '2025-05-13', 1, true],
+    ['month', '2025-05-01', '2025-06-01', 1, false],
+    ['month', '2025-05-01', '2025-06-02', 1, true],
+  ] as const)('enforces the %s trend bucket budget at the boundary', (timeGrain, start, end, maxBuckets, rejected) => {
+    const request: AnalysisRequest = { metrics: ['sales_amount'], dimensions: ['day'], start, end, timeGrain, intent: 'trend' }
+    const resolve = () => resolveAnalysisPlan(model(), request, { maxRangeDays: 366, maxBuckets })
+
+    if (rejected) expect(resolve).toThrow(/Trend exceeds bucket budget/)
+    else expect(resolve).not.toThrow()
+  })
+
   it.each([
     ['unknown metric', { ...base, metrics: ['missing'] }, /Unknown metric/],
+    ['unknown dimension', { ...base, dimensions: ['missing'] }, /Unknown dimension/],
+    ['unknown filter dimension', { ...base, filters: [{ dimension: 'missing', operator: 'equals', value: '浙江' }] }, /Unknown dimension/],
     ['no metrics', { ...base, metrics: [] }, /Select one to 3 metrics/],
     ['too many metrics', { ...base, metrics: ['sales_amount', 'order_count', 'atv', 'document_count'] }, /Select one to 3 metrics/],
     ['too many dimensions', { ...base, dimensions: ['day', 'province', 'channel'] }, /Too many dimensions/],
@@ -125,6 +161,13 @@ describe('CRM semantic analysis planner', () => {
     ['invalid sort metric', { ...base, sort: { metric: 'order_count', direction: 'desc' } }, /Sort metric must be selected/],
   ] as const)('rejects %s', (_name, request, error) => {
     expect(() => resolveAnalysisPlan(model(), request, budgets)).toThrow(error)
+  })
+
+  it('rejects a configured dimension filter operation that the request names', () => {
+    const request: AnalysisRequest = { ...base, metrics: ['sales_amount'], filters: [{ dimension: 'channel', operator: 'in', values: ['online'] }] }
+
+    expect(() => resolveAnalysisPlan(model((config) => { config.dimensions[2] = { ...config.dimensions[2]!, filters: ['equals'] } }), request, budgets))
+      .toThrow(/Unsupported filter for dimension channel/)
   })
 
   it('rejects a drilldown dimension that repeats a parent dimension', () => {
