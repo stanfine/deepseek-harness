@@ -44,6 +44,28 @@ export interface ReaderConfig {
 interface ResolvedConfig extends ReaderConfig { authorization: string }
 type ObjectValue = { [key: string]: JsonValue }
 
+/** Private compiler inputs for one configured aggregate request. */
+export interface ConfiguredAggregationSource {
+  readonly timeZone: string
+  readonly maxBuckets: number
+  readonly maxResultBytes: number
+  readonly distinctPageSize: number
+  readonly maxDistinctPages: number
+  readonly baseFilters: readonly JsonValue[]
+  /** Resolve a validated logical field key to its deployment-owned source field.
+   * @param key Logical `time`, `amount`, `customer`, measure, or dimension key.
+   * @returns Configured physical field.
+   */
+  field(key: string): string
+}
+
+/** Complete transport response and the publication limit shared with its caller. */
+export interface ConfiguredAggregationResult<T> {
+  value: T
+  maxResultBytes: number
+  maxBuckets: number
+}
+
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid Elasticsearch response')
   return value as ObjectValue
@@ -194,6 +216,39 @@ export class ElasticsearchReader {
    */
   async searchConfigured(name: string, body: JsonValue, signal: AbortSignal): Promise<JsonValue> {
     return this.search(this.dataset(name), object(body), signal)
+  }
+
+  /** Execute compiler-owned aggregation JSON against one configured dataset.
+   * @param name Planner-resolved logical dataset.
+   * @param execute Private operation that resolves configured fields and searches only this dataset.
+   * @param signal Caller cancellation.
+   * @returns Operation value and its complete-result and bucket limits.
+   */
+  async aggregateConfigured<T>(
+    name: string,
+    execute: (source: ConfiguredAggregationSource, search: (body: JsonValue) => Promise<JsonValue>) => Promise<T>,
+    signal: AbortSignal,
+  ): Promise<ConfiguredAggregationResult<T>> {
+    const dataset = this.dataset(name)
+    const traversal = AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)])
+    const source: ConfiguredAggregationSource = Object.freeze({
+      timeZone: this.config.timeZone,
+      maxBuckets: this.config.maxBuckets,
+      maxResultBytes: this.config.maxResponseBytes,
+      distinctPageSize: this.config.distinctPageSize,
+      maxDistinctPages: this.config.maxDistinctPages,
+      baseFilters: Object.freeze([...this.base(dataset)]),
+      field: (key: string) => {
+        if (key === 'time') return dataset.timeField
+        if (key === 'amount' && dataset.amountField) return dataset.amountField
+        if (key === 'customer' && dataset.customerField) return dataset.customerField
+        const field = dataset.measures?.[key] ?? dataset.dimensions[key]
+        if (!field) throw new Error(`Unknown configured field ${key}`)
+        return field
+      },
+    })
+    const value = await execute(source, body => this.search(dataset, object(body), traversal))
+    return { value, maxResultBytes: source.maxResultBytes, maxBuckets: source.maxBuckets }
   }
 
   /** Inspect source coverage using aggregates only.
