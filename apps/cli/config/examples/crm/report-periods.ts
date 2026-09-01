@@ -15,6 +15,12 @@ export interface ReportPeriods {
   fiscalYtd: ReportWindow
 }
 
+/** A normalized inclusive-start, exclusive-end calendar range. */
+export interface CalendarRange {
+  start: string
+  end: string
+}
+
 function calendarDate(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Expected YYYY-MM-DD date')
   const result = new Date(`${value}T00:00:00Z`)
@@ -38,6 +44,40 @@ export function businessDate(now: Date, timeZone: string): string {
   if (!match || !Number.isFinite(now.getTime())) throw new Error('Invalid business date input')
   const minutes = (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '+' ? 1 : -1)
   return text(new Date(now.getTime() + minutes * 60000))
+}
+
+/** Validate an exclusive-end calendar range against its configured day budget.
+ * @param start Inclusive calendar start in YYYY-MM-DD form.
+ * @param end Exclusive calendar end in YYYY-MM-DD form.
+ * @param maxDays Maximum number of calendar days in the range.
+ * @returns Normalized dates without host locale parsing.
+ * @throws {Error} When a date or range budget is invalid.
+ */
+export function resolveCalendarRange(start: string, end: string, maxDays: number): CalendarRange {
+  if (!Number.isSafeInteger(maxDays) || maxDays <= 0) throw new Error('Invalid maximum range days')
+  const startDate = calendarDate(start)
+  const endDate = calendarDate(end)
+  const days = (endDate.getTime() - startDate.getTime()) / 86400000
+  if (days <= 0 || days > maxDays) throw new Error('Date window exceeds configured range')
+  return { start: text(startDate), end: text(endDate) }
+}
+
+/** Return the whole-day duration of a normalized calendar range.
+ * @param range Inclusive-start, exclusive-end calendar range.
+ * @returns Positive count of calendar days.
+ */
+export function calendarRangeDays(range: CalendarRange): number {
+  return (calendarDate(range.end).getTime() - calendarDate(range.start).getTime()) / 86400000
+}
+
+/** Shift a normalized calendar range by whole days without changing its duration.
+ * @param range Inclusive-start, exclusive-end calendar range.
+ * @param days Number of calendar days to shift, positive or negative.
+ * @returns Shifted range in YYYY-MM-DD form.
+ */
+export function shiftCalendarRange(range: CalendarRange, days: number): CalendarRange {
+  if (!Number.isSafeInteger(days)) throw new Error('Invalid calendar day shift')
+  return { start: text(shifted(calendarDate(range.start), days)), end: text(shifted(calendarDate(range.end), days)) }
 }
 
 /** Resolve aligned report windows from one date inside the requested week.
