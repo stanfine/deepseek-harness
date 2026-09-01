@@ -88,6 +88,8 @@ interface ParseCompleteness {
   countErrorUpperBound: number
 }
 
+interface AnalysisWindow { start: string; end: string }
+
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid Elasticsearch aggregation response')
   return value as ObjectValue
@@ -114,8 +116,36 @@ function lastDate(end: string): string {
   return new Date(Date.parse(`${end}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
 }
 
+function dateText(value: Date): string { return value.toISOString().slice(0, 10) }
+
+function firstCalendarBucket(start: string, grain: NonNullable<ResolvedAnalysisPlan['timeGrain']>): Date {
+  const value = new Date(`${start}T00:00:00Z`)
+  if (grain === 'week') value.setUTCDate(value.getUTCDate() - (value.getUTCDay() + 6) % 7)
+  else if (grain === 'month') value.setUTCDate(1)
+  return value
+}
+
+function nextCalendarBucket(value: Date, grain: NonNullable<ResolvedAnalysisPlan['timeGrain']>): Date {
+  const result = new Date(value)
+  if (grain === 'day') result.setUTCDate(result.getUTCDate() + 1)
+  else if (grain === 'week') result.setUTCDate(result.getUTCDate() + 7)
+  else result.setUTCMonth(result.getUTCMonth() + 1)
+  return result
+}
+
+function calendarBuckets(window: AnalysisWindow, grain: NonNullable<ResolvedAnalysisPlan['timeGrain']>, countLimit?: number): string[] {
+  const last = lastDate(window.end)
+  const result: string[] = []
+  let bucket = firstCalendarBucket(window.start, grain)
+  while (countLimit === undefined ? dateText(bucket) <= last : result.length < countLimit) {
+    result.push(dateText(bucket))
+    bucket = nextCalendarBucket(bucket, grain)
+  }
+  return result
+}
+
 function rangeFilter(source: ConfiguredAggregationSource, start: string, end: string): JsonValue {
-  return { range: { [source.field('time')]: {
+  return { range: { [source.dimensionField('time')]: {
     gte: `${start}T00:00:00${source.timeZone}`, lt: `${end}T00:00:00${source.timeZone}`,
   } } }
 }
@@ -123,7 +153,7 @@ function rangeFilter(source: ConfiguredAggregationSource, start: string, end: st
 function sourceAggregations(source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan): ObjectValue {
   const aggs: ObjectValue = {}
   plan.sourceMeasures.forEach((metric, index) => {
-    if (metric.kind === 'sum') aggs[`m${index}`] = { sum: { field: source.field(metric.field) } }
+    if (metric.kind === 'sum') aggs[`m${index}`] = { sum: { field: source.metricField(metric.field) } }
   })
   return aggs
 }
@@ -131,7 +161,7 @@ function sourceAggregations(source: ConfiguredAggregationSource, plan: ResolvedA
 function queryFilters(source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan): JsonValue[] {
   const filters: JsonValue[] = [...source.baseFilters]
   for (const filter of plan.filters) {
-    const field = source.field(filter.dimension.field)
+    const field = source.dimensionField(filter.dimension.field)
     filters.push(filter.operator === 'equals'
       ? { term: { [field]: filter.values[0]! } }
       : { terms: { [field]: [...filter.values] } })
@@ -144,7 +174,7 @@ function dimensionAggregations(
 ): ObjectValue {
   if (depth === plan.dimensions.length) return sourceAggregations(source, plan)
   const dimension = plan.dimensions[depth]!
-  const field = source.field(dimension.field)
+  const field = source.dimensionField(dimension.field)
   const child = dimensionAggregations(source, plan, start, end, depth + 1)
   const aggregation = dimension.dataType === 'date'
     ? { date_histogram: { field, calendar_interval: plan.timeGrain!, time_zone: source.timeZone, format: 'yyyy-MM-dd',
@@ -155,7 +185,7 @@ function dimensionAggregations(
 
 function compile(source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan): JsonValue {
   const aggs: ObjectValue = {
-    source_coverage: { min: { field: source.field('time') } },
+    source_coverage: { min: { field: source.dimensionField('time') } },
     current: { filter: rangeFilter(source, plan.start, plan.end), aggs: dimensionAggregations(source, plan, plan.start, plan.end) },
   }
   if (plan.comparison) aggs.comparison = { filter: rangeFilter(source, plan.comparison.start, plan.comparison.end),
@@ -190,11 +220,12 @@ function derivedValues(plan: ResolvedAnalysisPlan, container: ObjectValue): Map<
 
 function parseRows(
   plan: ResolvedAnalysisPlan, container: ObjectValue, completeness: ParseCompleteness, maxBuckets: number,
+  window: AnalysisWindow, normalizedWindow: AnalysisWindow,
   dimensions: Record<string, DimensionValue> = {},
-  join: string[] = [], depth = 0,
+  sourceDimensions: Record<string, DimensionValue> = {}, join: string[] = [], depth = 0,
 ): ParsedRow[] {
   if (depth === plan.dimensions.length) return [{ dimensions, joinKey: join.join('\u0000'),
-    sourceKey: JSON.stringify(plan.dimensions.map(dimension => dimensions[dimension.id])), values: derivedValues(plan, container) }]
+    sourceKey: JSON.stringify(plan.dimensions.map(dimension => sourceDimensions[dimension.id])), values: derivedValues(plan, container) }]
   const definition = plan.dimensions[depth]!
   const missing = object(container[`d${depth}_missing`])
   completeness.missingBuckets += count(missing.doc_count)
@@ -205,22 +236,30 @@ function parseRows(
     completeness.omittedBuckets += count(grouping.sum_other_doc_count)
     completeness.countErrorUpperBound += count(grouping.doc_count_error_upper_bound)
   }
+  const expectedDates = definition.dataType === 'date' ? calendarBuckets(window, plan.timeGrain!) : undefined
+  if (expectedDates && grouping.buckets.length !== expectedDates.length) throw new Error('Invalid Elasticsearch calendar bucket sequence')
+  const normalizedDates = expectedDates ? calendarBuckets(normalizedWindow, plan.timeGrain!, expectedDates.length) : undefined
   const rows: ParsedRow[] = []
   grouping.buckets.forEach((raw, index) => {
     const bucket = object(raw)
     count(bucket.doc_count)
     let value: DimensionValue
+    let sourceValue: DimensionValue
     let joinPart: string
     if (definition.dataType === 'date') {
-      value = calendarDate(bucket.key_as_string)
+      sourceValue = calendarDate(bucket.key_as_string)
+      if (sourceValue !== expectedDates![index]) throw new Error('Invalid Elasticsearch calendar bucket sequence')
+      value = normalizedDates![index]!
       joinPart = `date:${depth}:${index}`
     } else {
       if (typeof bucket.key !== 'string' && typeof bucket.key !== 'number') throw new Error('Invalid Elasticsearch semantic bucket key')
       value = bucket.key
+      sourceValue = value
       joinPart = `key:${JSON.stringify(value)}`
     }
-    rows.push(...parseRows(plan, bucket, completeness, maxBuckets,
-      { ...dimensions, [definition.id]: value }, [...join, joinPart], depth + 1))
+    rows.push(...parseRows(plan, bucket, completeness, maxBuckets, window, normalizedWindow,
+      { ...dimensions, [definition.id]: value }, { ...sourceDimensions, [definition.id]: sourceValue },
+      [...join, joinPart], depth + 1))
   })
   return rows
 }
@@ -231,11 +270,11 @@ function distinctSources(
 ): JsonValue[] {
   const dimensions = plan.dimensions.map((dimension, index) => ({
     [`d${index}`]: dimension.dataType === 'date'
-      ? { date_histogram: { field: source.field(dimension.field), calendar_interval: plan.timeGrain!,
+      ? { date_histogram: { field: source.dimensionField(dimension.field), calendar_interval: plan.timeGrain!,
         time_zone: source.timeZone, format: 'yyyy-MM-dd', order: 'asc' } }
-      : { terms: { field: source.field(dimension.field), order: 'asc' } },
+      : { terms: { field: source.dimensionField(dimension.field), order: 'asc' } },
   }))
-  return [...dimensions, { customer: { terms: { field: source.field(metric.field) } } }]
+  return [...dimensions, { customer: { terms: { field: source.metricField(metric.field) } } }]
 }
 
 function compositeSourceKey(plan: ResolvedAnalysisPlan, key: ObjectValue): string {
@@ -274,11 +313,12 @@ async function exactDistinctValues(
         const key = compositeSourceKey(plan, object(bucket.key))
         values.set(key, (values.get(key) ?? 0) + 1)
       }
-      if (distinct.buckets.length === 0 || distinct.buckets.length < source.distinctPageSize || distinct.after_key === undefined) {
+      if (distinct.after_key === undefined) {
         result.set(metric.id, values)
         after = undefined
         break
       }
+      if (distinct.buckets.length === 0) throw new Error('Invalid Elasticsearch distinct empty page with after key')
       after = object(distinct.after_key)
     }
     if (after !== undefined) throw new Error(`Exact distinct count exceeds page budget for ${metric.id}`)
@@ -314,11 +354,11 @@ function change(current: ParsedMetric, comparison: ParsedMetric | undefined): Pi
 }
 
 function resultRow(
-  plan: ResolvedAnalysisPlan, current: ParsedRow, comparison: ParsedRow | undefined, comparisonReason: string | undefined,
+  plan: ResolvedAnalysisPlan, current: ParsedRow | undefined, comparison: ParsedRow | undefined, comparisonReason: string | undefined,
 ): AnalysisRow {
   const metrics: Record<string, MetricValue> = {}
   for (const definition of plan.metrics) {
-    const value = current.values.get(definition.id)!
+    const value = current?.values.get(definition.id) ?? { value: null, reason: 'current bucket is unavailable' }
     const metric: MetricValue = { value: value.value, ...(value.reason === undefined ? {} : { unavailableReason: value.reason }) }
     if (plan.comparison) {
       const compared = comparisonReason === undefined ? comparison?.values.get(definition.id) : undefined
@@ -330,7 +370,16 @@ function resultRow(
     }
     metrics[definition.id] = metric
   }
-  return { dimensions: current.dimensions, metrics }
+  return { dimensions: (current ?? comparison)!.dimensions, metrics }
+}
+
+function compareDateDimensions(plan: ResolvedAnalysisPlan, left: ParsedRow, right: ParsedRow): number {
+  for (const dimension of plan.dimensions) {
+    if (dimension.dataType !== 'date') continue
+    const difference = String(left.dimensions[dimension.id]).localeCompare(String(right.dimensions[dimension.id]))
+    if (difference !== 0) return difference
+  }
+  return 0
 }
 
 function compareRows(left: AnalysisRow, right: AnalysisRow, sort: AnalysisSort): number {
@@ -380,7 +429,8 @@ export async function executeSemanticAnalysis(
   const currentContainer = object(aggregations.current)
   const currentCount = count(currentContainer.doc_count)
   const currentCompleteness: ParseCompleteness = { missingBuckets: 0, omittedBuckets: 0, countErrorUpperBound: 0 }
-  const currentRows = parseRows(plan, currentContainer, currentCompleteness, executed.maxBuckets)
+  const currentWindow = { start: plan.start, end: plan.end }
+  const currentRows = parseRows(plan, currentContainer, currentCompleteness, executed.maxBuckets, currentWindow, currentWindow)
   applyDistinctValues(plan, currentRows, executed.value.currentDistinct)
   let comparisonRows: ParsedRow[] = []
   let comparisonCount = 0
@@ -388,25 +438,36 @@ export async function executeSemanticAnalysis(
   if (plan.comparison) {
     const comparisonContainer = object(aggregations.comparison)
     comparisonCount = count(comparisonContainer.doc_count)
-    comparisonRows = parseRows(plan, comparisonContainer, comparisonCompleteness, executed.maxBuckets)
+    comparisonRows = parseRows(plan, comparisonContainer, comparisonCompleteness, executed.maxBuckets, plan.comparison, currentWindow)
     applyDistinctValues(plan, comparisonRows, executed.value.comparisonDistinct)
   }
+  const currentByKey = new Map(currentRows.map(row => [row.joinKey, row]))
   const comparisonByKey = new Map(comparisonRows.map(row => [row.joinKey, row]))
   const priorYearUnavailable = plan.comparison?.kind === 'prior_year' && (earliest === null || earliest > plan.comparison.start)
   const comparisonReason = priorYearUnavailable ? 'Source history does not cover the comparison start' : undefined
-  let rows = currentRows.map(row => resultRow(plan, row, comparisonByKey.get(row.joinKey), comparisonReason))
+  const paired: { current: ParsedRow | undefined; comparison: ParsedRow | undefined; order: ParsedRow }[] = currentRows
+    .map(row => ({ current: row, comparison: comparisonByKey.get(row.joinKey), order: row }))
+  if (plan.comparison && !priorYearUnavailable) {
+    paired.push(...comparisonRows.filter(row => !currentByKey.has(row.joinKey))
+      .map(row => ({ current: undefined, comparison: row, order: row })))
+  }
+  paired.sort((left, right) => compareDateDimensions(plan, left.order, right.order))
+  let rows = paired.map(pair => resultRow(plan, pair.current, pair.comparison, comparisonReason))
   if (plan.sort) rows.sort((left, right) => compareRows(left, right, plan.sort!))
   const limitedRows = Math.max(0, rows.length - plan.limit)
   rows = rows.slice(0, plan.limit)
 
   const missingComparisonBuckets = plan.comparison !== undefined && !priorYearUnavailable
     && currentRows.some(row => !comparisonByKey.has(row.joinKey))
+  const missingCurrentBuckets = plan.comparison !== undefined && !priorYearUnavailable
+    && comparisonRows.some(row => !currentByKey.has(row.joinKey))
   const approximateMetrics: string[] = []
   const completeness: AnalysisCompleteness = {
     complete: currentCompleteness.missingBuckets === 0 && currentCompleteness.omittedBuckets === 0
       && currentCompleteness.countErrorUpperBound === 0 && comparisonCompleteness.missingBuckets === 0
       && comparisonCompleteness.omittedBuckets === 0 && comparisonCompleteness.countErrorUpperBound === 0
-      && approximateMetrics.length === 0 && !priorYearUnavailable && !missingComparisonBuckets && limitedRows === 0,
+      && approximateMetrics.length === 0 && !priorYearUnavailable && !missingComparisonBuckets && !missingCurrentBuckets
+      && limitedRows === 0,
     missingDimensionDocuments: currentCompleteness.missingBuckets + comparisonCompleteness.missingBuckets,
     omittedDocuments: currentCompleteness.omittedBuckets + comparisonCompleteness.omittedBuckets,
     limitedRows,
@@ -421,6 +482,7 @@ export async function executeSemanticAnalysis(
   if (approximateMetrics.length > 0) warnings.push(`Distinct-count metrics are approximate: ${approximateMetrics.join(', ')}.`)
   if (priorYearUnavailable) warnings.push('Source history does not cover the prior-year comparison start.')
   if (missingComparisonBuckets) warnings.push('One or more current rows have no matching comparison bucket.')
+  if (missingCurrentBuckets) warnings.push('One or more comparison rows have no matching current bucket.')
 
   const result: SemanticAnalysisResultV1 = {
     version: 1,

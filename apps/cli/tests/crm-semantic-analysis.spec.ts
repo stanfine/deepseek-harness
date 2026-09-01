@@ -28,7 +28,7 @@ function semanticConfig(): SemanticConfig {
       { id: 'document_count', name: '记录数', dataset: 'facts', kind: 'count', format: 'number',
         description: 'Matching source documents.', limitations: ['Documents may not be unique orders.'] },
       { id: 'purchaser_count', name: '购买人数', dataset: 'facts', kind: 'distinct_count', field: 'customer', format: 'number',
-        description: 'Distinct configured purchaser identifiers.', limitations: ['Cardinality is approximate.'] },
+        description: 'Distinct configured purchaser identifiers.', limitations: ['Missing identifiers are excluded.'] },
       { id: 'atv', name: '客单价', dataset: 'facts', kind: 'ratio', dependencies: ['sales_amount', 'order_count'], format: 'currency',
         description: 'Sales amount per order.', limitations: ['Unavailable when order count is zero.'] },
     ],
@@ -130,28 +130,28 @@ describe('CRM semantic analysis executor', () => {
           buckets: [first, second].map(([key, value]) => ({ key, doc_count: 1, m0: { value } })) }, d1_missing: { doc_count: 0 },
       })
       response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
-        current: { doc_count: 4, d0: { buckets: [group('2025-05-01', ['online', 20], ['store', 10])] }, d0_missing: { doc_count: 0 } },
-        comparison: { doc_count: 4, d0: { buckets: [group('2025-04-01', ['online', 10], ['store', 20])] }, d0_missing: { doc_count: 0 } },
+        current: { doc_count: 4, d0: { buckets: [group('2025-01-01', ['online', 20], ['store', 10])] }, d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 4, d0: { buckets: [group('2024-12-01', ['online', 10], ['store', 20])] }, d0_missing: { doc_count: 0 } },
       })))
     })
     const { model, plan } = resolved({ metrics: ['sales_amount'], dimensions: ['day', 'channel'], timeGrain: 'month',
-      start: '2025-05-01', end: '2025-06-01', comparison: 'previous_period', intent: 'comparison' })
+      start: '2025-01-01', end: '2025-02-01', comparison: 'previous_period', intent: 'comparison' })
 
     const result = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
 
     expect(body.aggs).toEqual({
       source_coverage: { min: { field: 'private_order_date' } },
-      current: { filter: { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-06-01T00:00:00+08:00' } } }, aggs: {
+      current: { filter: { range: { private_order_date: { gte: '2025-01-01T00:00:00+08:00', lt: '2025-02-01T00:00:00+08:00' } } }, aggs: {
         d0: { date_histogram: { field: 'private_order_date', calendar_interval: 'month', time_zone: '+08:00', format: 'yyyy-MM-dd',
-          min_doc_count: 0, extended_bounds: { min: '2025-05-01', max: '2025-05-31' }, order: { _key: 'asc' } }, aggs: {
+          min_doc_count: 0, extended_bounds: { min: '2025-01-01', max: '2025-01-31' }, order: { _key: 'asc' } }, aggs: {
           d1: { terms: { field: 'private_channel', size: 10, show_term_doc_count_error: true, order: { _key: 'asc' } },
             aggs: { m0: { sum: { field: 'private_amount' } } } },
           d1_missing: { missing: { field: 'private_channel' } },
         } }, d0_missing: { missing: { field: 'private_order_date' } },
       } },
-      comparison: { filter: { range: { private_order_date: { gte: '2025-03-31T00:00:00+08:00', lt: '2025-05-01T00:00:00+08:00' } } }, aggs: {
+      comparison: { filter: { range: { private_order_date: { gte: '2024-12-01T00:00:00+08:00', lt: '2025-01-01T00:00:00+08:00' } } }, aggs: {
         d0: { date_histogram: { field: 'private_order_date', calendar_interval: 'month', time_zone: '+08:00', format: 'yyyy-MM-dd',
-          min_doc_count: 0, extended_bounds: { min: '2025-03-31', max: '2025-04-30' }, order: { _key: 'asc' } }, aggs: {
+          min_doc_count: 0, extended_bounds: { min: '2024-12-01', max: '2024-12-31' }, order: { _key: 'asc' } }, aggs: {
           d1: { terms: { field: 'private_channel', size: 10, show_term_doc_count_error: true, order: { _key: 'asc' } },
             aggs: { m0: { sum: { field: 'private_amount' } } } },
           d1_missing: { missing: { field: 'private_channel' } },
@@ -159,8 +159,8 @@ describe('CRM semantic analysis executor', () => {
       } },
     })
     expect(result.rows).toEqual([
-      { dimensions: { day: '2025-05-01', channel: 'online' }, metrics: { sales_amount: { value: 20, comparisonValue: 10, changeRatio: 1 } } },
-      { dimensions: { day: '2025-05-01', channel: 'store' }, metrics: { sales_amount: { value: 10, comparisonValue: 20, changeRatio: -0.5 } } },
+      { dimensions: { day: '2025-01-01', channel: 'online' }, metrics: { sales_amount: { value: 20, comparisonValue: 10, changeRatio: 1 } } },
+      { dimensions: { day: '2025-01-01', channel: 'store' }, metrics: { sales_amount: { value: 10, comparisonValue: 20, changeRatio: -0.5 } } },
     ])
     expect(result.drilldownDimensions).toEqual([])
   })
@@ -226,16 +226,20 @@ describe('CRM semantic analysis executor', () => {
       if ((body.aggs as Record<string, unknown>).current) {
         response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
           current: { doc_count: 3 } })))
-      } else response.end(JSON.stringify(elastic({ distinct: { buckets: [
-        { key: { customer: 'private-customer-a' } }, { key: { customer: 'private-customer-b' } },
-        { key: { customer: 'private-customer-c' } },
-      ] } })))
+      } else {
+        const page = bodies.length - 1
+        response.end(JSON.stringify(elastic({ distinct: page === 1 ? {
+          buckets: [{ key: { customer: 'private-customer-a' } }], after_key: { customer: 'private-customer-a' },
+        } : { buckets: [
+          { key: { customer: 'private-customer-b' } }, { key: { customer: 'private-customer-c' } },
+        ] } })))
+      }
     })
     const { model, plan } = resolved({ metrics: ['purchaser_count'], start: '2025-05-01', end: '2025-06-01', intent: 'summary' })
     const result = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
     expect(result.rows[0]?.metrics.purchaser_count).toEqual({ value: 3 })
     expect(result.completeness).toMatchObject({ complete: true, approximateMetrics: [] })
-    expect(bodies).toHaveLength(2)
+    expect(bodies).toHaveLength(3)
     expect(bodies[1]).toMatchObject({ size: 0, query: { bool: { filter: [
       { term: { private_latest: true } },
       { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-06-01T00:00:00+08:00' } } },
@@ -243,6 +247,116 @@ describe('CRM semantic analysis executor', () => {
       { customer: { terms: { field: 'private_customer' } } },
     ] } } } })
     expect(JSON.stringify(result)).not.toContain('private-customer')
+  })
+
+  it('keeps a reserved customer dimension separate from the distinct identifier field', async () => {
+    let requestedField = ''
+    const endpoint = await fixture(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += String(chunk)
+      const body = JSON.parse(text) as { aggs: { current: { aggs: { d0: { terms: { field: string } } } } } }
+      requestedField = body.aggs.current.aggs.d0.terms.field
+      const key = requestedField === 'private_customer' ? 'raw-customer-secret' : 'safe-segment'
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 1, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+          buckets: [{ key, doc_count: 1, m0: { value: 20 } }] }, d0_missing: { doc_count: 0 } } })))
+    })
+    const collisionDatasets: ReaderConfig['datasets'] = { facts: { ...datasets.facts!, dimensions: {
+      ...datasets.facts!.dimensions, customer: 'private_customer_segment',
+    } } }
+    const config = semanticConfig()
+    config.dimensions.push({ id: 'customer_segment', name: '客户分组', dataset: 'facts', field: 'customer', dataType: 'keyword',
+      filters: ['equals', 'in'], description: 'Configured non-identifying customer segment.', limitations: [] })
+    const model = resolveSemanticModel(config, collisionDatasets)
+    const plan = resolveAnalysisPlan(model, { metrics: ['sales_amount'], dimensions: ['customer_segment'],
+      start: '2025-05-01', end: '2025-06-01', intent: 'ranking' }, limits)
+
+    const result = await executeSemanticAnalysis(reader(endpoint, { datasets: collisionDatasets }), model, plan,
+      new AbortController().signal)
+
+    expect(requestedField).toBe('private_customer_segment')
+    expect(result.rows[0]?.dimensions.customer_segment).toBe('safe-segment')
+    expect(JSON.stringify(result)).not.toContain('raw-customer-secret')
+  })
+
+  it('normalizes partial-month comparisons and includes comparison-only groups', async () => {
+    const endpoint = await fixture((_request, response) => {
+      const group = (key: string, buckets: { key: string; value: number }[]) => ({ key_as_string: key, doc_count: buckets.length,
+        d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+          buckets: buckets.map(bucket => ({ key: bucket.key, doc_count: 1, m0: { value: bucket.value } })) },
+        d1_missing: { doc_count: 0 } })
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 3, d0: { buckets: [
+          group('2025-05-01', [{ key: 'online', value: 10 }]), group('2025-06-01', [{ key: 'online', value: 20 }]),
+          group('2025-07-01', [{ key: 'online', value: 30 }]),
+        ] }, d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 4, d0: { buckets: [
+          group('2025-03-01', [{ key: 'legacy', value: 7 }, { key: 'online', value: 5 }]),
+          group('2025-04-01', [{ key: 'online', value: 10 }]), group('2025-05-01', [{ key: 'online', value: 15 }]),
+        ] }, d0_missing: { doc_count: 0 } },
+      })))
+    })
+    const { model, plan } = resolved({ metrics: ['sales_amount'], dimensions: ['day', 'channel'], timeGrain: 'month',
+      start: '2025-05-15', end: '2025-07-10', comparison: 'previous_period', intent: 'comparison' })
+
+    const result = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+
+    expect(result.rows).toEqual([
+      { dimensions: { day: '2025-05-01', channel: 'online' }, metrics: {
+        sales_amount: { value: 10, comparisonValue: 5, changeRatio: 1 },
+      } },
+      { dimensions: { day: '2025-05-01', channel: 'legacy' }, metrics: { sales_amount: {
+        value: null, unavailableReason: 'current bucket is unavailable', comparisonValue: 7, changeRatio: null,
+        changeUnavailableReason: 'current value is unavailable',
+      } } },
+      { dimensions: { day: '2025-06-01', channel: 'online' }, metrics: {
+        sales_amount: { value: 20, comparisonValue: 10, changeRatio: 1 },
+      } },
+      { dimensions: { day: '2025-07-01', channel: 'online' }, metrics: {
+        sales_amount: { value: 30, comparisonValue: 15, changeRatio: 1 },
+      } },
+    ])
+  })
+
+  it('rejects a partial-week response whose calendar bucket sequence has a gap', async () => {
+    const endpoint = await fixture((_request, response) => {
+      const bucket = (key: string) => ({ key_as_string: key, doc_count: 1, m0: { value: 1 } })
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 3, d0: { buckets: [bucket('2025-05-05'), bucket('2025-05-12'), bucket('2025-05-19')] },
+          d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 2, d0: { buckets: [bucket('2025-04-21'), bucket('2025-05-05')] },
+          d0_missing: { doc_count: 0 } },
+      })))
+    })
+    const { model, plan } = resolved({ metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'week',
+      start: '2025-05-07', end: '2025-05-20', comparison: 'previous_period', intent: 'trend' })
+
+    await expect(executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal))
+      .rejects.toThrow(/calendar bucket sequence/)
+  })
+
+  it('preserves an extra relative comparison period when shifted month bucket counts differ', async () => {
+    const endpoint = await fixture((_request, response) => {
+      const bucket = (key: string, value: number) => ({ key_as_string: key, doc_count: value, m0: { value } })
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 31, d0: { buckets: [bucket('2025-05-01', 31)] }, d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 31, d0: { buckets: [bucket('2025-03-01', 1), bucket('2025-04-01', 30)] },
+          d0_missing: { doc_count: 0 } },
+      })))
+    })
+    const { model, plan } = resolved({ metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'month',
+      start: '2025-05-01', end: '2025-06-01', comparison: 'previous_period', intent: 'trend' })
+
+    const result = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+
+    expect(result.rows).toEqual([
+      { dimensions: { day: '2025-05-01' }, metrics: { sales_amount: { value: 31, comparisonValue: 1, changeRatio: 30 } } },
+      { dimensions: { day: '2025-06-01' }, metrics: { sales_amount: {
+        value: null, unavailableReason: 'current bucket is unavailable', comparisonValue: 30, changeRatio: null,
+        changeUnavailableReason: 'current value is unavailable',
+      } } },
+    ])
+    expect(result.completeness.complete).toBe(false)
+    expect(result.warnings).toContain('One or more comparison rows have no matching current bucket.')
   })
 
   it('rejects malformed metric values and distinct traversals beyond the page budget', async () => {

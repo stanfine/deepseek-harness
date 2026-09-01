@@ -52,11 +52,16 @@ export interface ConfiguredAggregationSource {
   readonly distinctPageSize: number
   readonly maxDistinctPages: number
   readonly baseFilters: readonly JsonValue[]
-  /** Resolve a validated logical field key to its deployment-owned source field.
+  /** Resolve a validated metric field key to its deployment-owned source field.
    * @param key Logical `time`, `amount`, `customer`, measure, or dimension key.
    * @returns Configured physical field.
    */
-  field(key: string): string
+  metricField(key: string): string
+  /** Resolve a validated dimension field key without falling through to an identifier role.
+   * @param key Logical `time` or dimension key.
+   * @returns Configured physical field.
+   */
+  dimensionField(key: string): string
 }
 
 /** Complete transport response and the publication limit shared with its caller. */
@@ -238,12 +243,18 @@ export class ElasticsearchReader {
       distinctPageSize: this.config.distinctPageSize,
       maxDistinctPages: this.config.maxDistinctPages,
       baseFilters: Object.freeze([...this.base(dataset)]),
-      field: (key: string) => {
+      metricField: (key: string) => {
         if (key === 'time') return dataset.timeField
         if (key === 'amount' && dataset.amountField) return dataset.amountField
         if (key === 'customer' && dataset.customerField) return dataset.customerField
         const field = dataset.measures?.[key] ?? dataset.dimensions[key]
         if (!field) throw new Error(`Unknown configured field ${key}`)
+        return field
+      },
+      dimensionField: (key: string) => {
+        if (key === 'time') return dataset.timeField
+        const field = dataset.dimensions[key]
+        if (!field) throw new Error(`Unknown configured dimension field ${key}`)
         return field
       },
     })
