@@ -2,6 +2,8 @@
 import type { EChartsOption } from 'echarts'
 import type { AnalysisReport, AnalysisMetricColumn } from './analysis-model.ts'
 
+const MAX_DONUT_CATEGORIES = 8
+
 /** Supported presentation chosen only from validated persisted result metadata. */
 export type AnalysisView = { type: 'kpi' } | { type: 'table' }
   | { type: 'line' | 'horizontal-bar' | 'bar' | 'donut'; dimension: string; metric: string }
@@ -43,9 +45,11 @@ export function selectAnalysisView(report: AnalysisReport): AnalysisView {
   if (report.request.intent === 'composition') {
     const values = report.rows.map(row => reportMetric(row.metrics, metric).value)
     const nonnegative = values.every(value => value !== null && value >= 0)
-    if (report.completeness.complete && nonnegative && values.some(value => value !== null && value > 0)) {
+    if (report.request.comparison === undefined && report.completeness.complete && report.rows.length <= MAX_DONUT_CATEGORIES
+      && nonnegative && values.some(value => value !== null && value > 0)) {
       return { type: 'donut', dimension, metric }
     }
+    if (report.rows.length > MAX_DONUT_CATEGORIES) return { type: 'horizontal-bar', dimension, metric }
   }
   return { type: 'bar', dimension, metric }
 }
@@ -112,7 +116,12 @@ export function analysisChartOption(report: AnalysisReport, view: AnalysisView, 
   option.yAxis = horizontal ? { ...categoryAxis, inverse: true } : valueAxis
   option.dataZoom = zoom(horizontal)
   if (view.type === 'line') {
-    option.series = [{ type: 'line', name: definition.name, data: values(report, definition.id), connectNulls: false, smooth: false }]
+    const series: NonNullable<EChartsOption['series']> = [{ type: 'line',
+      name: report.request.comparison === undefined ? definition.name : labels.current,
+      data: values(report, definition.id), connectNulls: false, smooth: false }]
+    if (report.request.comparison !== undefined) series.push({ type: 'line', name: labels.comparison,
+      data: values(report, definition.id, true), connectNulls: false, smooth: false })
+    option.series = series
   } else {
     const series: NonNullable<EChartsOption['series']> = [{ type: 'bar',
       name: report.request.comparison === undefined ? definition.name : labels.current,

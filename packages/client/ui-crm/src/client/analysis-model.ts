@@ -66,11 +66,14 @@ const MAX_ROWS = 500
 const MAX_TEXT = 2000
 const MAX_LIST = 100
 const ID = /^[a-z][a-z0-9_]{0,63}$/
+/** Maximum UTF-8 bytes accepted for the complete persisted `crmAnalysis` wrapper. */
+export const ANALYSIS_META_MAX_BYTES = 1048576
 
 function object(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function finite(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) }
 function count(value: unknown): value is number { return finite(value) && Number.isSafeInteger(value) && value >= 0 }
 function text(value: unknown): value is string { return typeof value === 'string' && value.length <= MAX_TEXT }
+function explanation(value: unknown): value is string { return text(value) && value.trim().length > 0 }
 function id(value: unknown): value is string { return typeof value === 'string' && ID.test(value) }
 function date(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -124,39 +127,59 @@ function columns(value: unknown, selected: AnalysisReportRequest): value is Anal
 }
 
 const METRIC_VALUE_KEYS = ['value', 'comparisonValue', 'changeRatio', 'unavailableReason', 'comparisonUnavailableReason', 'changeUnavailableReason']
-function metricValue(value: unknown, compared: boolean): value is AnalysisMetricValue {
+function metricValue(value: unknown, compared: boolean, comparisonAvailable: boolean): value is AnalysisMetricValue {
   if (!object(value) || !exactKeys(value, METRIC_VALUE_KEYS) || !(value.value === null || finite(value.value))) return false
   for (const key of ['comparisonValue', 'changeRatio'] as const) if (value[key] !== undefined && value[key] !== null && !finite(value[key])) return false
-  for (const key of ['unavailableReason', 'comparisonUnavailableReason', 'changeUnavailableReason'] as const) if (value[key] !== undefined && !text(value[key])) return false
+  for (const key of ['unavailableReason', 'comparisonUnavailableReason', 'changeUnavailableReason'] as const) {
+    if (value[key] !== undefined && !explanation(value[key])) return false
+  }
   if ((value.value === null) !== (value.unavailableReason !== undefined)) return false
   if (!compared) return value.comparisonValue === undefined && value.changeRatio === undefined
     && value.comparisonUnavailableReason === undefined && value.changeUnavailableReason === undefined
-  return Object.hasOwn(value, 'comparisonValue') && Object.hasOwn(value, 'changeRatio')
+  if (!(Object.hasOwn(value, 'comparisonValue') && Object.hasOwn(value, 'changeRatio')
     && (value.comparisonValue === null) === (value.comparisonUnavailableReason !== undefined)
-    && (value.changeRatio === null) === (value.changeUnavailableReason !== undefined)
+    && (value.changeRatio === null) === (value.changeUnavailableReason !== undefined))) return false
+  if (!comparisonAvailable && value.comparisonValue !== null) return false
+  const unavailableOperand = value.value === null || value.comparisonValue === null || value.comparisonValue === 0
+  return unavailableOperand ? value.changeRatio === null && value.changeUnavailableReason !== undefined
+    : finite(value.changeRatio) && value.changeUnavailableReason === undefined
 }
-function row(value: unknown, selected: AnalysisReportRequest, declared: AnalysisReport['columns']): value is AnalysisReportRow {
+function row(
+  value: unknown, selected: AnalysisReportRequest, declared: AnalysisReport['columns'], comparisonAvailable: boolean,
+): value is AnalysisReportRow {
   if (!object(value) || !exactKeys(value, ['dimensions', 'metrics']) || !object(value.dimensions) || !object(value.metrics)
     || !sameKeys(value.dimensions, selected.dimensions) || !sameKeys(value.metrics, selected.metrics)) return false
   const dimensions = value.dimensions
   const metrics = value.metrics
   return declared.dimensions.every(column => column.dataType === 'date' ? date(dimensions[column.id])
     : typeof dimensions[column.id] === 'string' ? text(dimensions[column.id]) : finite(dimensions[column.id]))
-    && Object.values(metrics).every(item => metricValue(item, selected.comparison !== undefined))
+    && Object.values(metrics).every(item => metricValue(item, selected.comparison !== undefined, comparisonAvailable))
 }
 
 function window(value: unknown, current: boolean): boolean {
   return object(value) && exactKeys(value, current ? ['start', 'end', 'recordCount', 'available', 'observedStart']
     : ['kind', 'start', 'end', 'recordCount', 'available', 'observedStart', 'reason'])
     && date(value.start) && date(value.end) && value.start < value.end && count(value.recordCount) && typeof value.available === 'boolean'
-    && (value.observedStart === null || date(value.observedStart)) && (value.reason === undefined || text(value.reason))
+    && (value.observedStart === null || date(value.observedStart)) && (value.reason === undefined || explanation(value.reason))
 }
 function coverage(value: unknown, selected: AnalysisReportRequest): value is AnalysisReport['coverage'] {
   if (!object(value) || !exactKeys(value, ['current', 'comparison']) || !window(value.current, true) || !object(value.current)
     || value.current.available !== true || value.current.start !== selected.start || value.current.end !== selected.end) return false
   if (selected.comparison === undefined) return value.comparison === undefined
-  return window(value.comparison, false) && object(value.comparison) && value.comparison.kind === selected.comparison
-    && (value.comparison.available === true ? value.comparison.reason === undefined : text(value.comparison.reason))
+  if (!window(value.comparison, false) || !object(value.comparison) || value.comparison.kind !== selected.comparison) return false
+  const expected = comparisonWindow(selected)
+  return value.comparison.start === expected.start && value.comparison.end === expected.end
+    && (value.comparison.available === true ? value.comparison.reason === undefined : explanation(value.comparison.reason))
+}
+function shiftedDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+function comparisonWindow(selected: AnalysisReportRequest): { start: string; end: string } {
+  const rangeDays = (Date.parse(`${selected.end}T00:00:00Z`) - Date.parse(`${selected.start}T00:00:00Z`)) / 86400000
+  const shift = selected.comparison === 'previous_period' ? -rangeDays : -364
+  return { start: shiftedDate(selected.start, shift), end: shiftedDate(selected.end, shift) }
 }
 function completeness(value: unknown, metrics: readonly string[]): value is AnalysisReport['completeness'] {
   if (!object(value) || !exactKeys(value, ['complete', 'missingDimensionDocuments', 'omittedDocuments', 'limitedRows', 'countErrorUpperBound', 'approximateMetrics'])
@@ -182,16 +205,23 @@ function sameRequest(left: AnalysisReportRequest, right: AnalysisReportRequest):
 export function readAnalysis(meta: unknown): AnalysisReport | null {
   if (!object(meta) || !object(meta.crmAnalysis) || !exactKeys(meta.crmAnalysis, ['version', 'request', 'data'])
     || meta.crmAnalysis.version !== 1 || !request(meta.crmAnalysis.request) || !object(meta.crmAnalysis.data)) return null
+  try {
+    if (new TextEncoder().encode(JSON.stringify(meta.crmAnalysis)).byteLength > ANALYSIS_META_MAX_BYTES) return null
+  } catch { return null }
   const outerRequest = meta.crmAnalysis.request
   const data = meta.crmAnalysis.data
   if (!exactKeys(data, ['version', 'request', 'columns', 'rows', 'coverage', 'completeness', 'warnings', 'drilldownDimensions'])
     || data.version !== 1 || !request(data.request) || !sameRequest(outerRequest, data.request)) return null
-  if (!columns(data.columns, outerRequest)) return null
+  if (!columns(data.columns, outerRequest) || !coverage(data.coverage, outerRequest)) return null
   const declared = data.columns
-  if (!Array.isArray(data.rows) || data.rows.length > MAX_ROWS
-    || !data.rows.every(item => row(item, outerRequest, declared)) || !coverage(data.coverage, outerRequest)
+  const comparisonAvailable = outerRequest.comparison === undefined || object(data.coverage)
+    && object(data.coverage.comparison) && data.coverage.comparison.available
+  if (!Array.isArray(data.rows) || data.rows.length > MAX_ROWS || data.rows.length > outerRequest.limit
+    || !data.rows.every(item => row(item, outerRequest, declared, comparisonAvailable))
     || !completeness(data.completeness, outerRequest.metrics) || !stringList(data.warnings)
     || !idList(data.drilldownDimensions, 100) || data.drilldownDimensions.some(id => outerRequest.dimensions.includes(id))) return null
+  if (object(data.coverage) && object(data.coverage.comparison)
+    && !data.coverage.comparison.available && data.completeness.complete) return null
   return { request: outerRequest, columns: data.columns, rows: data.rows, coverage: data.coverage,
     completeness: data.completeness, warnings: data.warnings, drilldownDimensions: data.drilldownDimensions }
 }
