@@ -1,0 +1,15 @@
+- id: skill-filesystem
+  disabled: true
+- id: tool-skill
+  disabled: true
+- insert:
+    - id: crm-elasticsearch-fixture
+      name: ./elasticsearch-fixture.mjs
+    - id: crm-agent
+      name: cordis:include
+      config:
+        path: ../../../.snapshot-patches/crm-agent.cordis.yml
+
+- id: system-prompt
+  config:
+    persona: !!js process.env.DSH_CRM_PERSONA

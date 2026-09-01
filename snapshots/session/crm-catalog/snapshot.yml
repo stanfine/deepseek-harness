@@ -1,0 +1,16 @@
+version: 1
+scenario: crm-catalog
+profile: headless
+composition: crm-catalog
+recording: authored
+header:
+  class: crm-catalog
+  pin: true
+replay:
+  override: true
+workspace:
+  setup: crm-agent
+environment:
+  DSH_CRM_ALLOW_HTTP: 'true'
+  DSH_CRM_ES_USERNAME: fixture-user
+  DSH_CRM_ES_PASSWORD: fixture-password

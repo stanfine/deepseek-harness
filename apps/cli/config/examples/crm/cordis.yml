@@ -1,0 +1,19 @@
+# Source-checkout Web overlay. Run from the repository root.
+- id: agent-presets
+  config:
+    default: crm
+    includeShippedRoot: false
+    includeUserRoot: false
+    roots:
+      - path: !!js process.cwd() + '/apps/cli/config/examples/crm/presets'
+        trust: system
+- insert:
+    - id: crm-excel-host
+      name: ./crm-excel-host.ts
+      config:
+        artifactToolModule: !!js process.env.DSH_CRM_ARTIFACT_TOOL_MODULE || 'artifact-tool-unconfigured'
+        exportRoot: !!js process.env.DSH_CRM_EXPORT_ROOT || process.cwd() + '/.artifacts/crm-exports'
+        ttlMs: 3600000
+        maxFiles: 20
+    - id: crm-charts
+      name: "@deepseek-ai/dsh-client-ui-crm"

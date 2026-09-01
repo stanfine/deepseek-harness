@@ -39,6 +39,7 @@ import {
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
+import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 const snapshotsRoot = fileURLToPath(new URL('./', import.meta.url))
@@ -358,6 +359,18 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 }
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
+  async 'crm-agent'(cwd) {
+    const example = join(repoRoot, 'apps/cli/config/examples/crm')
+    const skillTarget = join(cwd, '.dsh/skills/beauty-crm-monthly/SKILL.md')
+    await mkdir(dirname(skillTarget), { recursive: true })
+    await copyFile(join(example, 'skills/beauty-crm-monthly/SKILL.md'), skillTarget)
+    const composition = (await readFile(join(example, 'presets/crm/agent.cordis.yml'), 'utf8'))
+      .replace(/^- id: persona\n[\s\S]*?(?=\n- id: crm-tools)/, '')
+      .replace('name: ../../crm-tools.ts', `name: ${join(example, 'crm-tools.ts')}\n  inject: [crmFixtureEndpoint]`)
+      .replace('process.env.DSH_CRM_ES_URL', 'ctx.crmFixtureEndpoint')
+      .replace("process.cwd() + '/apps/cli/config/examples/crm/skills'", "process.cwd() + '/.dsh/skills'")
+    await writeFile(join(cwd, '.snapshot-patches/crm-agent.cordis.yml'), composition)
+  },
   async 'editing-cordis-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })
@@ -631,6 +644,10 @@ describe('headless recorded-session snapshots', () => {
             ? 0
             : 1,
           env: {
+            ...scenario.manifest.workspace?.setup === 'crm-agent' ? {
+              DSH_CRM_PERSONA: String(loadOverlayPatches('CRM snapshot', join(repoRoot,
+                'apps/cli/config/examples/crm/presets/crm/agent.cordis.yml'))[0]?.config?.text),
+            } : {},
             DSH_SNAPSHOT: replaying ? 'replay' : 'record',
             DSH_SNAPSHOT_PROVIDER: model.provider,
             DSH_SNAPSHOT_MODEL: model.model,

@@ -1,0 +1,295 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_call_1",
+        "name": "skill",
+        "argumentsDelta": "{\"name\": \"beauty-crm-monthly\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_call_1",
+          "name": "skill",
+          "arguments": "{\"name\": \"beauty-crm-monthly\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_call_2",
+        "name": "crm_catalog",
+        "argumentsDelta": "{}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_call_2",
+          "name": "crm_catalog",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_profile_1",
+        "name": "crm_profile",
+        "argumentsDelta": "{\"dataset\": \"orders\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_profile_1",
+          "name": "crm_profile",
+          "arguments": "{\"dataset\": \"orders\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_profile_2",
+        "name": "crm_profile",
+        "argumentsDelta": "{\"dataset\": \"members\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_profile_2",
+          "name": "crm_profile",
+          "arguments": "{\"dataset\": \"members\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_call_3",
+        "name": "crm_query",
+        "argumentsDelta": "{\"dataset\": \"orders\", \"mode\": \"summary\", \"start\": \"2025-03-01\", \"end\": \"2025-04-01\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_call_3",
+          "name": "crm_query",
+          "arguments": "{\"dataset\": \"orders\", \"mode\": \"summary\", \"start\": \"2025-03-01\", \"end\": \"2025-04-01\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_call_4",
+        "name": "crm_query",
+        "argumentsDelta": "{\"dataset\": \"orders\", \"mode\": \"summary\", \"start\": \"2025-03-01\", \"end\": \"2025-04-01\", \"filters\": [{\"dimension\": \"channel\", \"value\": \"pos\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_call_4",
+          "name": "crm_query",
+          "arguments": "{\"dataset\": \"orders\", \"mode\": \"summary\", \"start\": \"2025-03-01\", \"end\": \"2025-04-01\", \"filters\": [{\"dimension\": \"channel\", \"value\": \"pos\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_group",
+        "name": "crm_query",
+        "argumentsDelta": "{\"dataset\":\"orders\",\"mode\":\"group\",\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"dimension\":\"channel\",\"chartType\":\"auto\",\"metric\":\"records\",\"intent\":\"composition\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_group",
+          "name": "crm_query",
+          "arguments": "{\"dataset\":\"orders\",\"mode\":\"group\",\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"dimension\":\"channel\",\"chartType\":\"auto\",\"metric\":\"records\",\"intent\":\"composition\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_trend",
+        "name": "crm_query",
+        "argumentsDelta": "{\"dataset\":\"orders\",\"mode\":\"trend\",\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"interval\":\"month\",\"chartType\":\"auto\",\"metric\":\"amount\",\"intent\":\"trend\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_trend",
+          "name": "crm_query",
+          "arguments": "{\"dataset\":\"orders\",\"mode\":\"trend\",\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"interval\":\"month\",\"chartType\":\"auto\",\"metric\":\"amount\",\"intent\":\"trend\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "CRM fixture report | March 2025\n\n| Scope | Order documents | Source amount |\n| --- | ---: | ---: |\n| All channels | 3 | 120 |\n| pos | 2 | 100 |\n\nSource: orders, 2025-03-01 inclusive to 2025-04-01 exclusive, +08:00. Source amount is not verified net revenue. Coverage does not prove completeness. Fixture data is not real business performance."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "CRM fixture report | March 2025\n\n| Scope | Order documents | Source amount |\n| --- | ---: | ---: |\n| All channels | 3 | 120 |\n| pos | 2 | 100 |\n\nSource: orders, 2025-03-01 inclusive to 2025-04-01 exclusive, +08:00. Source amount is not verified net revenue. Coverage does not prove completeness. Fixture data is not real business performance."
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

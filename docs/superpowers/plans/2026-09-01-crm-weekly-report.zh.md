@@ -10,7 +10,7 @@
 
 **技术栈：** TypeScript ESM、Cordis、Elasticsearch 7 JSON 请求、Schemastery、React、Apache ECharts、Vitest、录制会话快照。
 
-**规格：** [.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.zh.md](../../../.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.zh.md)
+**规格：** [.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.zh.md](../../../.agents/notes/implemented/feature/2026-09-01-crm-weekly-report.zh.md)
 
 ## 全局约束
 
@@ -32,6 +32,9 @@
 - [ ] 在生产代码前写入以下失败测试：
 
 ```ts
+import { expect } from 'vitest'
+declare function resolveReportPeriods(date: string, timeZone: string, fiscalYearStartMonth: number, today: string): unknown
+
 expect(resolveReportPeriods('2025-05-07', '+08:00', 4, '2025-05-10')).toMatchObject({
   current: { start: '2025-05-05', end: '2025-05-12', complete: false },
   previous: { start: '2025-04-28', end: '2025-05-05', complete: true },

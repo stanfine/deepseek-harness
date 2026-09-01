@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/plans/2026-09-01-crm-weekly-excel-export.md
-2026-09-01-crm-weekly-excel-export.md: 5b73fb6eb0ad069abd49075d81aee0925b83eeb7
-2026-09-01-crm-weekly-excel-export.zh.md: ae2f0cd5bb7dd1d19fc9e591d24a7a9d84b170ce
+2026-09-01-crm-weekly-excel-export.md: 09563b5bfd7b4ccf02b8e6c7de889a90a2367128
+2026-09-01-crm-weekly-excel-export.zh.md: 8793c0ca34c4cf8bca05495502c2da49fb4ac82b

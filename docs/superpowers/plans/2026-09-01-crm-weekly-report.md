@@ -10,7 +10,7 @@ English | [中文](2026-09-01-crm-weekly-report.zh.md)
 
 **Tech Stack:** TypeScript ESM, Cordis, Elasticsearch 7 JSON requests, Schemastery, React, Apache ECharts, Vitest, recorded-session snapshots.
 
-**Spec:** [.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.md](../../../.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.md)
+**Spec:** [.agents/notes/proposed/feature/2026-09-01-crm-weekly-report.md](../../../.agents/notes/implemented/feature/2026-09-01-crm-weekly-report.md)
 
 ## Global Constraints
 
@@ -32,6 +32,9 @@ English | [中文](2026-09-01-crm-weekly-report.zh.md)
 - [ ] Write this failing test before production code:
 
 ```ts
+import { expect } from 'vitest'
+declare function resolveReportPeriods(date: string, timeZone: string, fiscalYearStartMonth: number, today: string): unknown
+
 expect(resolveReportPeriods('2025-05-07', '+08:00', 4, '2025-05-10')).toMatchObject({
   current: { start: '2025-05-05', end: '2025-05-12', complete: false },
   previous: { start: '2025-04-28', end: '2025-05-05', complete: true },

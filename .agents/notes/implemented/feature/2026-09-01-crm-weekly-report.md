@@ -1,6 +1,6 @@
 # Agent Note: Source-backed CRM weekly report
 
-Status: proposed
+Status: implemented
 
 English | [中文](2026-09-01-crm-weekly-report.zh.md)
 
@@ -8,7 +8,7 @@ English | [中文](2026-09-01-crm-weekly-report.zh.md)
 
 The CRM example can query bounded order and member aggregates and render one result per tool call, but it cannot produce the business sections in the supplied REMY report template. A weekly report needs comparable periods, additive sales measures, customer lifecycle cohorts, product contribution, source availability, and recommendations tied to query evidence. The current source also contains future-dated records and incomplete derived indices, so the Agent cannot treat the latest date or an empty metric as trustworthy.
 
-## Proposal
+## Decision
 
 The CRM preset gains a weekly-report capability built from fixed Elasticsearch indices and allowlisted fields. Data stays in each source index. The model selects a report week and invokes domain tools; it never supplies an index name, field name, query DSL, script, customer identifier, or arithmetic expression.
 
@@ -16,17 +16,17 @@ The report week is Monday 00:00 through the following Monday 00:00 in the config
 
 ### Data roles
 
-Configuration maps logical roles to exact indices and fields. `orders` owns document-level exploratory queries. `orderFacts` owns additive order amount, order count, item quantity and customer-day facts. `orderItems` owns line-item amount, quantity, series and SKU. `members` owns registrations. `repurchases` owns observed repeat-purchase events. Each role declares its amount meaning, time field, identity field, dimensions, source filters, and public coverage requirements. Missing roles remain visible as unavailable report sections.
+Configuration maps logical roles to exact indices and fields. `orders` owns document-level exploratory queries. `order_facts` owns additive order amount, order count, item quantity and customer-day facts. `order_items` owns line-item amount, quantity, series and SKU. `members` owns registrations. The example has no owner-approved repeat-purchaser role or equivalence between weekly multiple orders and business repeat purchase, so that measure remains unavailable. Each role declares its amount meaning, time field, identity field, dimensions, source filters, and public coverage requirements. Missing roles remain visible as unavailable report sections.
 
-The reader validates every role, field path, date window, bucket budget, response budget and credential reference at load. It applies deployment-owned filters such as minimum order amount before aggregation. It rejects partial shards, timeouts, redirects, inexact totals and exhausted exact-count pagination. Results disclose missing values, omitted buckets, source coverage and whether a measure is exact.
+The reader validates every role, field path, date window, bucket budget, response budget and credential reference at load. The current fact source cannot safely enforce the workbook minimum-order rule, so the report exposes that unresolved definition. It rejects partial shards, timeouts, redirects, inexact totals and exhausted exact-count pagination. Results disclose missing values, omitted buckets, source coverage and whether a measure is exact.
 
 ### Weekly report tools
 
 `crm_report_periods` accepts one inclusive date inside the requested week and returns the canonical current, previous, prior-year and fiscal-year-to-date windows. This centralizes period arithmetic and prevents the model from choosing mismatched weekday ranges.
 
-`crm_sales_report` returns one row for each available comparison window with source amount, order count, purchasing customers, repeat purchasers, item quantity, amount per order, items per order, amount per item, purchase frequency and amount per purchaser. A ratio is null with a reason when its denominator is zero or an input is unavailable. Customer counts use bounded composite pagination and never return identifiers.
+`crm_sales_report` returns one row for each available comparison window with source amount, order count, purchasing customers, an explicitly unavailable repeat-purchaser measure, item quantity, amount per order, items per order, amount per item, purchase frequency and amount per purchaser. A ratio is null with a reason when its denominator is zero or an input is unavailable. Customer counts use bounded composite pagination and never return identifiers.
 
-`crm_lifecycle_report` returns new purchasers, existing-new base and active count, retained base and active count, winback base and active count, and the corresponding rates only when source coverage contains every required historical window. The implementation classifies customers inside bounded Elasticsearch composite pages and emits counts only. It fails the whole metric rather than returning a partial count when pagination or time budgets are exhausted. Registration counts remain separate from first-purchase cohorts.
+`crm_lifecycle_report` returns new purchasers, existing-new base and active count, retained base and active count, winback base and active count, and the corresponding rates only when deployment configuration declares a complete-history start that contains every required historical window and observed date extent agrees. The implementation classifies customers inside bounded Elasticsearch composite pages and emits counts only. It fails the whole metric rather than returning a partial count when pagination or time budgets are exhausted. Registration counts remain separate from first-purchase cohorts.
 
 `crm_product_report` groups the configured line-item source by series or SKU and returns bounded amount, quantity and line-document contribution. It discloses omitted groups and missing product keys. It does not call a line-document count an order count, does not infer UV, and does not use the empty nested `items` field from the document-level order index.
 
@@ -42,6 +42,10 @@ The business Skill generates sections for data coverage, executive observations,
 
 The configured cluster exposes dedicated order-fact, order-item-wide, repurchase and customer-order-daily indices. The order-item-wide mapping provides line-level series, SKU, amount and quantity. Its observed coverage ends in May 2025, and the member `firstBuyDate` field has no values. The document-level order source spans future dates through 2029. The report therefore profiles coverage before selecting periods and states that the example data may be historical or synthetic. These observations configure the example; they are not assumptions built into the reusable reader.
 
+## Consequences
+
+The CRM example now produces useful weekly sales and product evidence directly from separate source indices without a warehouse migration. Its fixed tools make source gaps visible: the configured series field is currently empty, traffic is absent, lifecycle history begins too late, and prior-year comparisons are unavailable for the observed 2025 weeks. The UI renders each persisted result independently, while the Skill assembles the narrative and evidence-bound recommendations across calls.
+
 ## Alternatives considered
 
 **General Elasticsearch or federated-query tool.** A general tool would reduce implementation per metric but would let model arguments choose fields, joins or DSL that bypass report semantics and privacy review. The proposed tools keep acquisition and arithmetic closed.
@@ -50,7 +54,7 @@ The configured cluster exposes dedicated order-fact, order-item-wide, repurchase
 
 **Prompt-only report generation.** Prompt instructions cannot make missing traffic, historical coverage or item data valid. They also cannot guarantee period alignment or exact customer counts. The proposal encodes these requirements in tool behavior and returns unavailable reasons to the Skill.
 
-## Acceptance criteria
+## Testing
 
 - A user can request a Monday-to-Sunday CRM week without naming query modes, and the Agent uses canonical current, previous, prior-year and fiscal-year-to-date windows.
 - Sales output computes only from configured additive fields, returns null ratios for zero or missing denominators, and distinguishes documents, orders, line documents and customers.
