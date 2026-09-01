@@ -38,7 +38,7 @@ it('renders a summary as KPI cards with null and partial values kept visible', (
   meta.crmAnalysis.data.completeness.omittedDocuments = 2
   render(<CrmAnalysisRow {...props(meta)} />)
   expect(screen.getByRole('region', { name: 'CRM 灵活分析' })).toBeTruthy()
-  expect(screen.getByText('销售额')).toBeTruthy()
+  expect(screen.getAllByText('销售额').length).toBeGreaterThan(0)
   expect(screen.getByText('—')).toBeTruthy()
   expect(screen.getByText(/本期数据缺失/)).toBeTruthy()
   expect(screen.getByText(/部分结果/)).toBeTruthy()
@@ -47,12 +47,34 @@ it('renders a summary as KPI cards with null and partial values kept visible', (
 it('renders a chart, accessible source table, warnings, and comparison context', () => {
   const meta = analysis()
   meta.crmAnalysis.data.warnings = ['渠道存在迟到数据']
+  meta.crmAnalysis.data.columns.metrics[0]!.limitations = ['退款按成交日冲减']
   render(<CrmAnalysisRow {...props(meta)} />)
   expect(screen.getByRole('img', { name: '渠道 · 销售额' })).toBeTruthy()
   expect(screen.getByRole('table', { name: 'CRM 分析数据表' })).toBeTruthy()
-  expect(screen.getByText(/2025-07-01 → 2025-08-01/)).toBeTruthy()
+  expect(screen.getAllByText(/2025-07-01 → 2025-08-01/).length).toBeGreaterThan(0)
   expect(screen.getByText(/对比期.*2025-05-31 → 2025-07-01/)).toBeTruthy()
+  const coverage = screen.getByLabelText('数据覆盖').textContent ?? ''
+  expect(coverage).toMatch(/本期覆盖.*3.*2025-07-01 → 2025-08-01.*2024-01-01/)
+  expect(coverage).toMatch(/对比期覆盖.*2.*2025-05-31 → 2025-07-01.*2024-01-01/)
+  expect(screen.getByText('成交金额')).toBeTruthy()
+  expect(screen.getByText(/退款按成交日冲减/)).toBeTruthy()
   expect(screen.getByText('渠道存在迟到数据')).toBeTruthy()
+})
+
+it('shows unavailable reasons beside grouped current, comparison, and change values', () => {
+  const meta = analysis()
+  meta.crmAnalysis.request.metrics = ['sales_amount', 'order_count']
+  meta.crmAnalysis.data.request = structuredClone(meta.crmAnalysis.request)
+  meta.crmAnalysis.data.columns.metrics.push({ id: 'order_count', name: '订单数', format: 'number', description: '成交订单', limitations: [] })
+  meta.crmAnalysis.data.rows[0]!.metrics.sales_amount = { value: null, comparisonValue: 0, changeRatio: null,
+    unavailableReason: '本期覆盖不足', changeUnavailableReason: '对比值为零' }
+  meta.crmAnalysis.data.rows[0]!.metrics.order_count = { value: 3, comparisonValue: null, changeRatio: null,
+    comparisonUnavailableReason: '对比覆盖不足', changeUnavailableReason: '无法计算变化' }
+  render(<CrmAnalysisRow {...props(meta)} />)
+  expect(screen.getByText('本期覆盖不足')).toBeTruthy()
+  expect(screen.getByText('对比值为零')).toBeTruthy()
+  expect(screen.getByText('对比覆盖不足')).toBeTruthy()
+  expect(screen.getByText('无法计算变化')).toBeTruthy()
 })
 
 it('uses the table fallback for a two-dimensional result', () => {
@@ -82,6 +104,18 @@ it('keeps a valid empty result readable', () => {
   meta.crmAnalysis.data.rows = []
   render(<CrmAnalysisRow {...props(meta)} />)
   expect(screen.getByText('该范围没有返回分析数据。')).toBeTruthy()
+})
+
+it('does not advertise drilldown for a dimensionless KPI summary', () => {
+  const meta = analysis()
+  meta.crmAnalysis.request.dimensions = []
+  meta.crmAnalysis.request.intent = 'summary'
+  meta.crmAnalysis.data.request = structuredClone(meta.crmAnalysis.request)
+  meta.crmAnalysis.data.columns.dimensions = []
+  meta.crmAnalysis.data.rows[0]!.dimensions = {}
+  render(<CrmAnalysisRow {...props(meta)} />)
+  expect(screen.queryByText(/可下钻维度/)).toBeNull()
+  expect(screen.queryByRole('button', { name: /下钻/ })).toBeNull()
 })
 
 it('prepares a logical drilldown draft without submitting or exposing source details', () => {

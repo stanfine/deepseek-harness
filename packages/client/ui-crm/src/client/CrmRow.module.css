@@ -15,6 +15,12 @@
 .metrics dd { margin: 8px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .metrics small { display: block; margin-top: 6px; color: var(--dsw-alias-label-secondary); }
 .metricNote { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.coverage { display: grid; gap: 4px; color: var(--dsw-alias-label-secondary); }
+.coverage p { margin: 0; overflow-wrap: anywhere; }
+.definitions { display: grid; gap: 6px; }
+.definitions > div { display: grid; grid-template-columns: minmax(100px, 1fr) 3fr; gap: 10px; }
+.definitions dd { margin: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.definitions dd span, .cellReason { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); }
 .chart { width: 100%; height: 340px; min-width: 0; margin: 12px 0; }
 .warning { color: var(--dsw-alias-label-primary); border-left: 3px solid var(--dsw-alias-label-secondary); padding-left: 12px; }
 .tableWrap { overflow: auto; max-height: 260px; }
@@ -29,6 +35,7 @@
 @media (max-width: 600px) {
   .card { padding: 12px; }
   .metrics { grid-template-columns: 1fr; }
+  .definitions > div { grid-template-columns: 1fr; gap: 2px; }
   .chart { height: 280px; }
   .tableWrap { max-height: 340px; }
 }

@@ -40,6 +40,9 @@ function reasons(metric: AnalysisMetricValue): string[] {
   return [metric.unavailableReason, metric.comparisonUnavailableReason, metric.changeUnavailableReason]
     .filter((reason): reason is string => reason !== undefined)
 }
+function metricCell(valueText: string, reason: string | undefined) {
+  return <>{valueText}{reason && <small className={css.cellReason}>{reason}</small>}</>
+}
 function draft(report: AnalysisReport, rowIndex: number, nextDimension: string, preface: string): string {
   const row = report.rows[rowIndex]
   if (row === undefined) throw new Error('Validated analysis row is missing')
@@ -67,7 +70,7 @@ export function CrmAnalysisRow({ block, t, useInput, inputActions, inspect }: Pr
   const option = useMemo(() => report === null || view === null ? null
     : analysisChartOption(report, view, { current: t('analysisCurrent'), comparison: t('analysisComparison') }), [report, t, view])
   const raw = settled ? block.content.map(item => item.type === 'text' ? item.text : JSON.stringify(item)).join('\n') : ''
-  const nextDimension = report?.drilldownDimensions[0]
+  const nextDimension = report && report.request.dimensions.length > 0 ? report.drilldownDimensions[0] : undefined
   const summaryRow = report?.rows[0]
   const pick = (index: number) => {
     if (report === null || nextDimension === undefined || currentDraft !== '' || report.rows[index] === undefined) return
@@ -80,6 +83,17 @@ export function CrmAnalysisRow({ block, t, useInput, inputActions, inspect }: Pr
       <p className={css.context}>{t('range')}: {report.request.start} → {report.request.end}</p>
       {report.coverage.comparison && <p className={css.context}>{t('analysisComparison')}: {report.coverage.comparison.start} → {report.coverage.comparison.end}
         {!report.coverage.comparison.available && ` · ${report.coverage.comparison.reason ?? t('analysisComparisonUnavailable')}`}</p>}
+      <div className={css.coverage} aria-label={t('analysisCoverage')}>
+        <p><strong>{t('analysisCurrentCoverage')}</strong> · {t('analysisRecords')}: {report.coverage.current.recordCount}
+          {' · '}{t('analysisCoverageWindow')}: {report.coverage.current.start} → {report.coverage.current.end}
+          {' · '}{t('analysisObservedStart')}: {report.coverage.current.observedStart ?? '—'}</p>
+        {report.coverage.comparison && <p><strong>{t('analysisComparisonCoverage')}</strong> · {t('analysisRecords')}: {report.coverage.comparison.recordCount}
+          {' · '}{t('analysisCoverageWindow')}: {report.coverage.comparison.start} → {report.coverage.comparison.end}
+          {' · '}{t('analysisObservedStart')}: {report.coverage.comparison.observedStart ?? '—'}</p>}
+      </div>
+      <dl className={css.definitions}>{report.columns.metrics.map(column => <div key={column.id}>
+        <dt>{column.name}</dt><dd>{column.description}
+          {column.limitations.length > 0 && <span>{t('analysisLimitations')}: {column.limitations.join('；')}</span>}</dd></div>)}</dl>
       {view?.type === 'kpi' && summaryRow && <dl className={css.metrics}>{report.columns.metrics.map((column) => {
         const result = rowMetric(summaryRow, column.id)
         return <div key={column.id}><dt>{column.name}</dt><dd>{value(result.value, column.format)}</dd>
@@ -96,9 +110,12 @@ export function CrmAnalysisRow({ block, t, useInput, inputActions, inspect }: Pr
         {nextDimension && <th scope="col">{t('drill')}</th>}
       </tr></thead><tbody>{report.rows.map((row, index) => <tr key={JSON.stringify(row.dimensions)}>
         {report.columns.dimensions.map(column => <th key={column.id} scope="row">{String(row.dimensions[column.id])}</th>)}
-        {report.columns.metrics.map(column => <td key={column.id}>{value(rowMetric(row, column.id).value, column.format)}</td>)}
-        {report.request.comparison && report.columns.metrics.map(column => <td key={`${column.id}-comparison`}>{value(rowMetric(row, column.id).comparisonValue ?? null, column.format)}</td>)}
-        {report.request.comparison && report.columns.metrics.map(column => <td key={`${column.id}-change`}>{change(rowMetric(row, column.id))}</td>)}
+        {report.columns.metrics.map((column) => { const result = rowMetric(row, column.id); return <td key={column.id}>
+          {metricCell(value(result.value, column.format), result.unavailableReason)}</td> })}
+        {report.request.comparison && report.columns.metrics.map((column) => { const result = rowMetric(row, column.id); return <td key={`${column.id}-comparison`}>
+          {metricCell(value(result.comparisonValue ?? null, column.format), result.comparisonUnavailableReason)}</td> })}
+        {report.request.comparison && report.columns.metrics.map((column) => { const result = rowMetric(row, column.id); return <td key={`${column.id}-change`}>
+          {metricCell(change(result), result.changeUnavailableReason)}</td> })}
         {nextDimension && <td><button type="button" disabled={currentDraft !== ''}
           aria-label={`${t('drill')} ${String(row.dimensions[report.request.dimensions.at(-1) ?? ''])}`}
           onClick={() => { pick(index) }}>{t('drill')}</button></td>}
