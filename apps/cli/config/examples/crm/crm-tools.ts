@@ -1,10 +1,12 @@
 /** Native CRM tools mounted only by the opt-in CRM preset. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
+import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
+import { executeSemanticAnalysis } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
 import { WeeklyReportReader, type WeeklyReportConfig } from './weekly-report.ts'
 import type { CrmExcelExports } from './crm-excel-host.ts'
@@ -116,7 +118,7 @@ export function apply(ctx: Context, config: CrmConfig): void {
     throw new Error('Invalid CRM Excel configuration')
   }
   const exportBaseUrl = downloadBaseUrl(config.excel.downloadBaseUrl)
-  resolveSemanticModel(config.semantic, config.datasets)
+  const semanticModel = resolveSemanticModel(config.semantic, config.datasets)
   const reader = new ElasticsearchReader(resolveConfig(config, process.env))
   const weekly = new WeeklyReportReader(weeklyConfig(config), (dataset, body, signal) => reader.searchConfigured(dataset, body, signal))
   let excelExports: CrmExcelExports | undefined
@@ -167,6 +169,64 @@ export function apply(ctx: Context, config: CrmConfig): void {
       },
     },
     async execute(args, exec) { return json(await reader.query(args, exec.signal)) },
+  })))
+  const semanticOutput = {
+    ...output,
+    presentationMeta(args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
+      return { crmAnalysis: { version: 1, request: json(args), data: value } }
+    },
+  }
+  const analysisParameters: ParameterSchemaSpec = {
+    metrics: { type: 'array' as const, required: true as const, items: { type: 'string' as const } },
+    dimensions: { type: 'array' as const, items: { type: 'string' as const } },
+    start: { type: 'string' as const, required: true as const, description: 'Inclusive YYYY-MM-DD business date.' },
+    end: { type: 'string' as const, required: true as const, description: 'Exclusive YYYY-MM-DD business date.' },
+    intent: { type: 'string' as const, required: true as const,
+      enum: ['summary', 'trend', 'ranking', 'composition', 'comparison'] },
+    filters: { type: 'array' as const, items: { type: 'object' as const, additionalProperties: false, properties: {
+      dimension: { type: 'string' as const, required: true },
+      operator: { type: 'string' as const, enum: ['equals', 'in'], required: true },
+      value: { type: 'string' as const }, values: { type: 'array' as const, items: { type: 'string' as const } },
+    } } },
+    comparison: { type: 'string' as const, enum: ['none', 'previous_period', 'prior_year'] },
+    timeGrain: { type: 'string' as const, enum: ['day', 'week', 'month'] },
+    sort: { type: 'object' as const, additionalProperties: false, properties: {
+      metric: { type: 'string' as const, required: true },
+      direction: { type: 'string' as const, enum: ['asc', 'desc'], required: true },
+    } },
+    limit: { type: 'number' as const },
+  }
+  const executeAnalysis = async (request: AnalysisRequest | DrilldownRequest, signal: AbortSignal) => {
+    const plan = resolveAnalysisPlan(semanticModel, request,
+      { maxRangeDays: config.maxRangeDays, maxBuckets: config.maxBuckets })
+    return json(await executeSemanticAnalysis(reader, semanticModel, plan, signal))
+  }
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_metric_catalog', description: 'List configured CRM business metrics, meanings, availability, and limits.',
+    parameters: {}, output,
+    async execute() { return semanticModel.metricCatalog() },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_dimension_catalog', description: 'List configured CRM analysis dimensions, supported filters, and limits.',
+    parameters: {}, output,
+    async execute() { return semanticModel.dimensionCatalog() },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_analyze', description: 'Calculate bounded CRM aggregates from configured business metrics and dimensions.',
+    parameters: analysisParameters, output: semanticOutput,
+    async execute(args, exec) { return executeAnalysis(args as unknown as AnalysisRequest, exec.signal) },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_drilldown', description: 'Continue a CRM aggregate by adding one configured dimension to selected parent values.',
+    parameters: { ...analysisParameters,
+      drilldownDimension: { type: 'string' as const, required: true },
+      parentFilters: { type: 'array' as const, required: true, items: { type: 'object' as const,
+        additionalProperties: false, properties: {
+          dimension: { type: 'string' as const, required: true },
+          values: { type: 'array' as const, required: true, items: { type: 'string' as const } },
+        } } },
+    }, output: semanticOutput,
+    async execute(args, exec) { return executeAnalysis(args as unknown as DrilldownRequest, exec.signal) },
   })))
   const reportOutput = (kind: string) => ({
     ...output,

@@ -160,7 +160,7 @@ function validateDimension(definition: DimensionDefinition, datasets: Record<str
     if (definition.field !== 'time' || !definition.timeGrains?.length || definition.timeGrains.some(grain => !configuredGrains.has(grain))) {
       throw new Error('Invalid date dimension time grains')
     }
-  } else if (definition.timeGrains !== undefined) throw new Error('Only date dimensions support time grains')
+  } else if (definition.timeGrains?.length) throw new Error('Only date dimensions support time grains')
   if (!Array.isArray(definition.limitations) || definition.limitations.some(limitation => !validText(limitation))) throw new Error('Invalid dimension limitations')
 }
 

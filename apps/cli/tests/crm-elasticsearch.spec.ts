@@ -19,7 +19,8 @@ const config = {
     dimensions: { channel: 'channelId' }, previewFields: ['time', 'amount', 'items.category', 'items.amount'],
     latestVersionField: 'latest',
   }, order_facts: { index: 'test_order_facts', timeField: 'orderDate', amountField: 'orderAmount', customerField: 'customerId',
-    amountMeaning: 'Order facts.', dimensions: {}, measures: { orderCount: 'orderCount', quantity: 'skuQuantity' }, previewFields: [],
+    amountMeaning: 'Order facts.', dimensions: { province: 'province', channel: 'channel' },
+    measures: { orderCount: 'orderCount', quantity: 'skuQuantity' }, previewFields: [],
   }, order_items: { index: 'test_order_items', timeField: 'time', amountField: 'amount', customerField: 'customerId',
     amountMeaning: 'Order line items.', dimensions: { series: 'series', sku: 'sku' }, measures: { quantity: 'quantity' }, previewFields: [],
   } },
@@ -32,8 +33,15 @@ const config = {
         description: 'Configured order amount.', limitations: ['Source accounting semantics are unverified.'] },
       { id: 'order_count', name: '订单数', dataset: 'order_facts', kind: 'sum', field: 'orderCount', format: 'number',
         description: 'Configured order count.', limitations: ['Source order definition is unverified.'] },
+      { id: 'item_quantity', name: '商品件数', dataset: 'order_items', kind: 'sum', field: 'quantity', format: 'number',
+        description: 'Configured item quantity.', limitations: ['Line items are not orders.'] },
     ],
-    dimensions: [],
+    dimensions: [
+      { id: 'province', name: '省份', dataset: 'order_facts', field: 'province', dataType: 'keyword', filters: ['equals', 'in'],
+        description: 'Configured province.', limitations: [] },
+      { id: 'channel', name: '渠道', dataset: 'order_facts', field: 'channel', dataType: 'keyword', filters: ['equals', 'in'],
+        description: 'Configured channel.', limitations: [] },
+    ],
   },
 }
 const env = { TEST_USER: 'fixture-user', TEST_PASSWORD: 'fixture-password' }
@@ -51,6 +59,12 @@ async function fixture(handler: (...args: Parameters<RequestListener>) => unknow
   servers.push(server)
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+}
+
+function objectKeys(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return []
+  if (Array.isArray(value)) return value.flatMap(objectKeys)
+  return Object.entries(value).flatMap(([key, nested]) => [key, ...objectKeys(nested)])
 }
 
 describe('CRM Elasticsearch reader', () => {
@@ -75,9 +89,26 @@ describe('CRM Elasticsearch reader', () => {
   })
 
   it('registers scoped tools and runs a canonical result through the actual tool runtime', async () => {
-    const endpoint = await fixture((_req, res) => res.end(JSON.stringify(response({
-      amount: { count: 3, sum: 120, avg: 40, min: 10, max: 70 },
-    }))))
+    let requestCount = 0
+    const endpoint = await fixture(async (req, res) => {
+      requestCount += 1
+      let text = ''; for await (const chunk of req) text += String(chunk)
+      const body = JSON.parse(text) as { aggs?: Record<string, unknown> }
+      if (body.aggs?.current) {
+        const current = body.aggs.current as { aggs?: Record<string, unknown> }
+        const grouped = current.aggs?.d0 !== undefined
+        const firstGroup = current.aggs?.d0 as { aggs?: Record<string, unknown> } | undefined
+        const nested = firstGroup?.aggs?.d1 !== undefined
+        res.end(JSON.stringify(response({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+          current: grouped
+            ? { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+              buckets: [{ key: '浙江', doc_count: 3, ...(nested ? { d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+                buckets: [{ key: '门店', doc_count: 3, m0: { value: 120 } }] }, d1_missing: { doc_count: 0 } }
+                : { m0: { value: 120 } }) }] }, d0_missing: { doc_count: 0 } }
+            : { doc_count: 3, m0: { value: 120 } },
+        })))
+      } else res.end(JSON.stringify(response({ amount: { count: 3, sum: 120, avg: 40, min: 10, max: 70 } })))
+    })
     const ctx = new Context()
     ctx.provide('connection', { fetch: { register: () => () => {} } } as never)
     const previousUser = process.env.TEST_USER, previousPassword = process.env.TEST_PASSWORD
@@ -88,8 +119,41 @@ describe('CRM Elasticsearch reader', () => {
       const plugin = ctx.plugin(CrmTools, { ...config, endpoint })
       await plugin
       expect(ctx.tools.schemas().map(tool => tool.name)).toEqual([
-        'crm_catalog', 'crm_profile', 'crm_query', 'crm_report_periods', 'crm_sales_report', 'crm_lifecycle_report', 'crm_product_report', 'crm_export_weekly_excel',
+        'crm_catalog', 'crm_profile', 'crm_query', 'crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown',
+        'crm_report_periods', 'crm_sales_report', 'crm_lifecycle_report', 'crm_product_report', 'crm_export_weekly_excel',
       ])
+      const semanticSchemas = ctx.tools.schemas().filter(tool => tool.name.startsWith('crm_') &&
+        ['crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown'].includes(tool.name))
+      expect(objectKeys(semanticSchemas)).not.toEqual(expect.arrayContaining(['index', 'field', 'script', 'formula', 'dsl', 'path']))
+      const metricCatalog = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-metrics'),
+        name: 'crm_metric_catalog', arguments: {} })
+      const dimensionCatalog = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-dimensions'),
+        name: 'crm_dimension_catalog', arguments: {} })
+      expect((metricCatalog.value as { metrics: Array<{ id: string }> }).metrics.map(metric => metric.id)).toContain('sales_amount')
+      expect((dimensionCatalog.value as { dimensions: Array<{ id: string }> }).dimensions.map(dimension => dimension.id)).toContain('province')
+      expect(objectKeys([metricCatalog.value, dimensionCatalog.value]))
+        .not.toEqual(expect.arrayContaining(['index', 'field', 'script', 'formula', 'dsl', 'path']))
+      const analysis = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-analysis'),
+        name: 'crm_analyze', arguments: { metrics: ['sales_amount'], dimensions: ['province'], start: '2025-01-01',
+          end: '2025-02-01', intent: 'ranking', sort: { metric: 'sales_amount', direction: 'desc' }, limit: 5 } })
+      expect(analysis.isError, JSON.stringify(analysis)).toBe(false)
+      expect(analysis.meta).toMatchObject({ crmAnalysis: { version: 1,
+        request: { metrics: ['sales_amount'], dimensions: ['province'], intent: 'ranking' },
+        data: { version: 1, rows: [{ dimensions: { province: '浙江' } }] } } })
+      const drilldown = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-drilldown'),
+        name: 'crm_drilldown', arguments: { metrics: ['sales_amount'], dimensions: ['province'], drilldownDimension: 'channel',
+          parentFilters: [{ dimension: 'province', values: ['浙江'] }], start: '2025-01-01', end: '2025-02-01',
+          intent: 'ranking', limit: 5 } })
+      expect(drilldown.isError).toBe(false)
+      expect(drilldown.meta).toMatchObject({ crmAnalysis: { version: 1,
+        request: { drilldownDimension: 'channel', parentFilters: [{ dimension: 'province', values: ['浙江'] }] },
+        data: { version: 1, rows: [{ dimensions: { province: '浙江', channel: '门店' } }] } } })
+      const beforeRejected = requestCount
+      const rejected = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-cross-dataset'),
+        name: 'crm_analyze', arguments: { metrics: ['sales_amount', 'item_quantity'], start: '2025-01-01',
+          end: '2025-02-01', intent: 'summary' } })
+      expect(rejected.isError).toBe(true)
+      expect(requestCount).toBe(beforeRejected)
       const periods = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-weekly-periods'),
         name: 'crm_report_periods', arguments: { date: '2025-05-07' } })
       expect(periods.value).toMatchObject({ current: { start: '2025-05-05', end: '2025-05-12' }, priorYear: { start: '2024-05-06' } })

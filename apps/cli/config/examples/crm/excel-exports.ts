@@ -18,6 +18,9 @@ export class ExcelExportRegistry {
   private readonly entries = new Map<string, Entry>()
   private readonly reservations = new Map<string, string>()
   private readonly root: string
+  private readonly ttlMs: number
+  private readonly maxFiles: number
+  private readonly now: () => number
 
   /** Create one registry.
    * @param root Deployment-owned export directory.
@@ -25,9 +28,11 @@ export class ExcelExportRegistry {
    * @param maxFiles Maximum concurrently registered files.
    * @param now Clock injected for deterministic tests.
    */
-  constructor(root: string, private readonly ttlMs: number, private readonly maxFiles: number,
-    private readonly now: () => number = Date.now) {
+  constructor(root: string, ttlMs: number, maxFiles: number, now: () => number = Date.now) {
     this.root = resolve(root)
+    this.ttlMs = ttlMs
+    this.maxFiles = maxFiles
+    this.now = now
     if (dirname(this.root) === this.root) throw new Error('CRM Excel export root cannot be a filesystem root')
     if (!Number.isSafeInteger(ttlMs) || ttlMs <= 0 || !Number.isSafeInteger(maxFiles) || maxFiles <= 0) {
       throw new Error('Invalid CRM Excel export limits')
