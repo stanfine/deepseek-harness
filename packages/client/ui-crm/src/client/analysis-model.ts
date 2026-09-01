@@ -3,9 +3,9 @@ export type AnalysisIntent = 'summary' | 'trend' | 'ranking' | 'composition' | '
 /** A closed metric format supplied by the semantic catalog. */
 export type AnalysisMetricFormat = 'currency' | 'number' | 'decimal'
 /** One selected dimension column. */
-export interface AnalysisDimensionColumn { id: string; name: string; dataType: 'date' | 'keyword' }
+export interface AnalysisDimensionColumn { id: string; name: string; dataType: 'date' | 'keyword'; composition: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' }
 /** One selected metric column. */
-export interface AnalysisMetricColumn { id: string; name: string; format: AnalysisMetricFormat; description: string; limitations: string[] }
+export interface AnalysisMetricColumn { id: string; name: string; format: AnalysisMetricFormat; additivity: 'additive' | 'non_additive'; description: string; limitations: string[] }
 /** Persisted current and optional comparison values; the client never derives them. */
 export interface AnalysisMetricValue {
   value: number | null
@@ -57,6 +57,7 @@ export interface AnalysisReport {
     limitedRows: number
     countErrorUpperBound: number
     approximateMetrics: string[]
+    missingMetricDocuments: number
   }
   warnings: string[]
   drilldownDimensions: string[]
@@ -110,12 +111,13 @@ function request(value: unknown): value is AnalysisReportRequest {
 }
 
 function dimensionColumn(value: unknown): value is AnalysisDimensionColumn {
-  return object(value) && exactKeys(value, ['id', 'name', 'dataType']) && id(value.id) && text(value.name)
-    && ['date', 'keyword'].includes(String(value.dataType))
+  return object(value) && exactKeys(value, ['id', 'name', 'dataType', 'composition']) && id(value.id) && text(value.name)
+    && ['date', 'keyword'].includes(String(value.dataType)) && ['mutually_exclusive', 'overlapping', 'high_cardinality'].includes(String(value.composition))
 }
 function metricColumn(value: unknown): value is AnalysisMetricColumn {
-  return object(value) && exactKeys(value, ['id', 'name', 'format', 'description', 'limitations']) && id(value.id) && text(value.name)
-    && ['currency', 'number', 'decimal'].includes(String(value.format)) && text(value.description) && stringList(value.limitations, 20)
+  return object(value) && exactKeys(value, ['id', 'name', 'format', 'additivity', 'description', 'limitations']) && id(value.id) && text(value.name)
+    && ['currency', 'number', 'decimal'].includes(String(value.format)) && ['additive', 'non_additive'].includes(String(value.additivity))
+    && text(value.description) && stringList(value.limitations, 20)
 }
 function columns(value: unknown, selected: AnalysisReportRequest): value is AnalysisReport['columns'] {
   if (!object(value) || !exactKeys(value, ['dimensions', 'metrics']) || !Array.isArray(value.dimensions) || !Array.isArray(value.metrics)
@@ -182,12 +184,13 @@ function comparisonWindow(selected: AnalysisReportRequest): { start: string; end
   return { start: shiftedDate(selected.start, shift), end: shiftedDate(selected.end, shift) }
 }
 function completeness(value: unknown, metrics: readonly string[]): value is AnalysisReport['completeness'] {
-  if (!object(value) || !exactKeys(value, ['complete', 'missingDimensionDocuments', 'omittedDocuments', 'limitedRows', 'countErrorUpperBound', 'approximateMetrics'])
+  if (!object(value) || !exactKeys(value, ['complete', 'missingDimensionDocuments', 'omittedDocuments', 'limitedRows', 'countErrorUpperBound', 'approximateMetrics', 'missingMetricDocuments'])
     || typeof value.complete !== 'boolean' || !count(value.missingDimensionDocuments) || !count(value.omittedDocuments)
-    || !count(value.limitedRows) || !count(value.countErrorUpperBound) || !idList(value.approximateMetrics, 5)
+    || !count(value.limitedRows) || !count(value.countErrorUpperBound) || !count(value.missingMetricDocuments)
+    || !idList(value.approximateMetrics, 5)
     || !value.approximateMetrics.every(metric => metrics.includes(metric))) return false
   return !value.complete || value.missingDimensionDocuments === 0 && value.omittedDocuments === 0 && value.limitedRows === 0
-    && value.countErrorUpperBound === 0 && value.approximateMetrics.length === 0
+    && value.countErrorUpperBound === 0 && value.approximateMetrics.length === 0 && value.missingMetricDocuments === 0
 }
 function sameRequest(left: AnalysisReportRequest, right: AnalysisReportRequest): boolean {
   return left.start === right.start && left.end === right.end && left.intent === right.intent && left.comparison === right.comparison

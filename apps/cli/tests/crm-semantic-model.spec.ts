@@ -186,4 +186,15 @@ describe('CRM semantic model', () => {
       expect.objectContaining({ id: 'repeat_purchase', available: false, limitations: ['The configured source has no repeat-purchase definition.'] }),
     ]))
   })
+
+  it.each([
+    ['count field', { field: 'amount' }],
+    ['count dependencies', { dependencies: ['sales_amount', 'order_count'] }],
+    ['sum dependencies', { dependencies: ['sales_amount', 'order_count'] }],
+    ['ratio field', { field: 'amount' }],
+  ])('rejects runtime-incompatible %s keys', (_name, extra) => {
+    const config = semanticConfig()
+    config.metrics[2] = { ...config.metrics[2]!, ...extra } as MetricDefinition
+    expect(() => resolveSemanticModel(config, datasets)).toThrow(/metric definition keys/i)
+  })
 })

@@ -66,6 +66,18 @@ async function fixture(handler: (...args: Parameters<RequestListener>) => unknow
 }
 
 function elastic(aggregations: JsonValue, total = 3): JsonValue {
+  const addCoverage = (value: unknown): void => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return
+    const record = value as Record<string, unknown>
+    for (const key of Object.keys(record)) {
+      const match = /^m(\d+)$/.exec(key)
+      if (match && !Object.hasOwn(record, `${key}_coverage`) && typeof record.doc_count === 'number') {
+        record[`${key}_coverage`] = { value: record.doc_count }
+      }
+      addCoverage(record[key])
+    }
+  }
+  addCoverage(aggregations)
   return { timed_out: false, _shards: { failed: 0 }, hits: { total: { value: total, relation: 'eq' }, hits: [] }, aggregations }
 }
 
@@ -110,7 +122,8 @@ describe('CRM semantic analysis executor', () => {
       aggs: {
         source_coverage: { min: { field: 'private_order_date' } },
         current: { filter: { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-06-01T00:00:00+08:00' } } },
-          aggs: { m0: { sum: { field: 'private_amount' } }, m1: { sum: { field: 'private_order_count' } } } },
+          aggs: { m0: { sum: { field: 'private_amount' } }, m0_missing: { missing: { field: 'private_amount' } },
+            m1: { sum: { field: 'private_order_count' } }, m1_missing: { missing: { field: 'private_order_count' } } } },
       },
       track_total_hits: true,
     })
@@ -146,7 +159,7 @@ describe('CRM semantic analysis executor', () => {
         d0: { date_histogram: { field: 'private_order_date', calendar_interval: 'month', time_zone: '+08:00', format: 'yyyy-MM-dd',
           min_doc_count: 0, extended_bounds: { min: '2025-01-01', max: '2025-01-31' }, order: { _key: 'asc' } }, aggs: {
           d1: { terms: { field: 'private_channel', size: 10, show_term_doc_count_error: true, order: { _key: 'asc' } },
-            aggs: { m0: { sum: { field: 'private_amount' } } } },
+            aggs: { m0: { sum: { field: 'private_amount' } }, m0_missing: { missing: { field: 'private_amount' } } } },
           d1_missing: { missing: { field: 'private_channel' } },
         } }, d0_missing: { missing: { field: 'private_order_date' } },
       } },
@@ -154,7 +167,7 @@ describe('CRM semantic analysis executor', () => {
         d0: { date_histogram: { field: 'private_order_date', calendar_interval: 'month', time_zone: '+08:00', format: 'yyyy-MM-dd',
           min_doc_count: 0, extended_bounds: { min: '2024-12-01', max: '2024-12-31' }, order: { _key: 'asc' } }, aggs: {
           d1: { terms: { field: 'private_channel', size: 10, show_term_doc_count_error: true, order: { _key: 'asc' } },
-            aggs: { m0: { sum: { field: 'private_amount' } } } },
+            aggs: { m0: { sum: { field: 'private_amount' } }, m0_missing: { missing: { field: 'private_amount' } } } },
           d1_missing: { missing: { field: 'private_channel' } },
         } }, d0_missing: { missing: { field: 'private_order_date' } },
       } },
@@ -407,10 +420,49 @@ describe('CRM semantic analysis executor', () => {
     const { model, plan } = resolved({ metrics: ['sales_amount'], start: '2025-05-01', end: '2025-06-01', intent: 'summary' })
     const first = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
     const bytes = Buffer.byteLength(JSON.stringify(first))
+      + Buffer.byteLength(JSON.stringify({ version: 1, request: first.request, data: first }))
 
     await expect(executeSemanticAnalysis(reader(endpoint, { maxResponseBytes: bytes }), model, plan, new AbortController().signal))
       .resolves.toEqual(first)
     await expect(executeSemanticAnalysis(reader(endpoint, { maxResponseBytes: bytes - 1 }), model, plan, new AbortController().signal))
       .rejects.toThrow(/result byte limit exceeded/)
+  })
+
+  it('marks partial sum coverage and its derived ratio unavailable in grouped comparisons', async () => {
+    const endpoint = await fixture((_request, response) => response.end(JSON.stringify(elastic({
+      source_coverage: { value: Date.parse('2024-01-01T16:30:00Z') },
+      current: { doc_count: 2, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
+        { key: 'online', doc_count: 2, m0: { value: 100 }, m0_missing: { doc_count: 1 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
+      ] }, d0_missing: { doc_count: 0 } },
+      comparison: { doc_count: 2, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
+        { key: 'online', doc_count: 2, m0: { value: 80 }, m0_missing: { doc_count: 0 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
+      ] }, d0_missing: { doc_count: 0 } },
+    }))))
+    const { model, plan } = resolved({ metrics: ['sales_amount', 'atv'], dimensions: ['channel'],
+      start: '2025-05-01', end: '2025-06-01', comparison: 'previous_period', intent: 'comparison' })
+    const result = await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+    expect(result.rows[0]?.metrics.sales_amount).toMatchObject({
+      value: null, unavailableReason: '1 matching documents have missing sales_amount values',
+    })
+    expect(result.rows[0]?.metrics.atv).toMatchObject({ value: null, unavailableReason: 'sales_amount is unavailable' })
+    expect(result.completeness).toMatchObject({ complete: false, missingMetricDocuments: 1 })
+    expect(result.coverage.current.observedStart).toBe('2024-01-02')
+  })
+
+  it('compiles configured date filters as local-day ranges', async () => {
+    let body: Record<string, unknown> = {}
+    const endpoint = await fixture(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += String(chunk)
+      body = JSON.parse(text) as Record<string, unknown>
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 0, m0: { value: 0 }, m0_missing: { doc_count: 0 } } }, 0)))
+    })
+    const { model, plan } = resolved({ metrics: ['sales_amount'], start: '2025-05-01', end: '2025-06-01', intent: 'summary',
+      filters: [{ dimension: 'day', operator: 'in', values: ['2025-05-01', '2025-05-03'] }] })
+    await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+    expect(body).toMatchObject({ query: { bool: { filter: [expect.anything(), { bool: { minimum_should_match: 1, should: [
+      { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-05-02T00:00:00+08:00' } } },
+      { range: { private_order_date: { gte: '2025-05-03T00:00:00+08:00', lt: '2025-05-04T00:00:00+08:00' } } },
+    ] } }] } } })
   })
 })

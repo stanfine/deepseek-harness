@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-crm-semantic-analytics.md
-2026-09-01-crm-semantic-analytics.md: de8aaf755d7fe2a214471d1e1f72deafb889d389
-2026-09-01-crm-semantic-analytics.zh.md: 182a1d0fab1bbac2053af3f5c73a0cd42fbea0bc
+2026-09-01-crm-semantic-analytics.md: e8a5b09edb5067583a8b5816fdd55614a59455f0
+2026-09-01-crm-semantic-analytics.zh.md: ee4d82871e1b8ad6ab26dcda84e0538fc4273a85

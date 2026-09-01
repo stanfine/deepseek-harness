@@ -47,6 +47,18 @@ const base: AnalysisRequest = {
 }
 
 describe('CRM semantic analysis planner', () => {
+  it('rejects multiple date dimensions and incompatible trend sort before execution', () => {
+    const semantic = model()
+    const secondDate = { ...semantic.dimensions.get('day')!, id: 'month' }
+    const forged = { ...semantic, dimensions: new Map([...semantic.dimensions, ['month', secondDate]]) }
+    expect(() => resolveAnalysisPlan(forged, { ...base, metrics: ['sales_amount'], dimensions: ['day', 'month'], timeGrain: 'day', intent: 'trend' }, budgets)).toThrow(/one date dimension/i)
+    expect(() => resolveAnalysisPlan(semantic, { ...base, metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'day', intent: 'trend', sort: { metric: 'sales_amount', direction: 'desc' } }, budgets)).toThrow(/sort.*intent/i)
+  })
+
+  it('budgets every date grouping and rejects date filters with invalid calendar values', () => {
+    expect(() => resolveAnalysisPlan(model(), { metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'day', start: '2025-01-01', end: '2025-02-01', intent: 'comparison' }, { ...budgets, maxBuckets: 10 })).toThrow(/bucket budget/i)
+    expect(() => resolveAnalysisPlan(model(), { ...base, metrics: ['sales_amount'], filters: [{ dimension: 'day', operator: 'equals', value: '2025-02-30' }] }, budgets)).toThrow(/calendar filter/i)
+  })
   it('resolves a summary with stable metric deduplication and derived source measures', () => {
     const plan = resolveAnalysisPlan(model(), base, budgets)
 

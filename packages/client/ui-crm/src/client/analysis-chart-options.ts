@@ -46,6 +46,8 @@ export function selectAnalysisView(report: AnalysisReport): AnalysisView {
     const values = report.rows.map(row => reportMetric(row.metrics, metric).value)
     const nonnegative = values.every(value => value !== null && value >= 0)
     if (report.request.comparison === undefined && report.completeness.complete && report.rows.length <= MAX_DONUT_CATEGORIES
+      && first(report.columns.metrics).additivity === 'additive'
+      && first(report.columns.dimensions).composition === 'mutually_exclusive'
       && nonnegative && values.some(value => value !== null && value > 0)) {
       return { type: 'donut', dimension, metric }
     }

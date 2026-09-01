@@ -36,12 +36,12 @@ export const Config = z.object({
     metrics: z.array(z.object({
       id: z.string().required(), name: z.string().required(), dataset: z.string().required(), kind: z.string().required(),
       format: z.string().required(), description: z.string().required(), limitations: z.array(z.string()).required(),
-      field: z.string(), dependencies: z.array(z.string()),
+      field: z.string(), dependencies: z.array(z.string()), additivity: z.string(),
     })).required(),
     dimensions: z.array(z.object({
       id: z.string().required(), name: z.string().required(), dataset: z.string().required(), field: z.string().required(),
       dataType: z.string().required(), filters: z.array(z.string()).required(), timeGrains: z.array(z.string()),
-      description: z.string().required(), limitations: z.array(z.string()).required(),
+      composition: z.string(), description: z.string().required(), limitations: z.array(z.string()).required(),
     })).required(),
   }).required(),
   report: z.object({

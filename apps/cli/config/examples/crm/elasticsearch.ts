@@ -69,6 +69,7 @@ export interface ConfiguredAggregationResult<T> {
   value: T
   maxResultBytes: number
   maxBuckets: number
+  timeZone: string
 }
 
 function object(value: unknown): ObjectValue {
@@ -259,7 +260,7 @@ export class ElasticsearchReader {
       },
     })
     const value = await execute(source, body => this.search(dataset, object(body), traversal))
-    return { value, maxResultBytes: source.maxResultBytes, maxBuckets: source.maxBuckets }
+    return { value, maxResultBytes: source.maxResultBytes, maxBuckets: source.maxBuckets, timeZone: source.timeZone }
   }
 
   /** Inspect source coverage using aggregates only.

@@ -182,6 +182,11 @@ function resolveFilter(model: ResolvedSemanticModel, dataset: string, filter: un
   const values = input.operator === 'equals'
     ? resolveValues([input.value], 'Equality filter requires one text value')
     : resolveValues(input.values, 'Inclusion filter requires text values')
+  if (dimension.dataType === 'date' && values.some((value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true
+    const parsed = new Date(`${value}T00:00:00Z`)
+    return !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
+  })) throw new Error('Invalid calendar filter value')
   return { dimension, operator: input.operator, values: Object.freeze(values) }
 }
 
@@ -288,11 +293,17 @@ export function resolveAnalysisPlan(
     dimensions.push(drilldown)
   }
   if (dimensions.length > model.limits.maxDimensions) throw new Error('Too many dimensions')
+  const dateDimensions = dimensions.filter(dimension => dimension.dataType === 'date')
+  if (dateDimensions.length > 1) throw new Error('Analysis supports at most one date dimension')
   const limit = request.limit ?? model.limits.maxTopN
   if (!Number.isSafeInteger(limit) || limit <= 0 || limit > model.limits.maxTopN) throw new Error('Invalid analysis limit')
   const timeGrain = resolveTimeGrain(model, dimensions, request.timeGrain, request.intent)
-  if (request.intent === 'trend' && calendarBucketCount(range, timeGrain!) > budgets.maxBuckets) throw new Error('Trend exceeds bucket budget')
+  if (dateDimensions.length > 0 && timeGrain === undefined) throw new Error('Date dimension requires a time grain')
+  if (timeGrain !== undefined && calendarBucketCount(range, timeGrain) > budgets.maxBuckets) {
+    throw new Error(request.intent === 'trend' ? 'Trend exceeds bucket budget' : 'Calendar grouping exceeds bucket budget')
+  }
   const sort = resolveSort(request.sort, metrics)
+  if (sort !== undefined && !['ranking', 'composition', 'comparison'].includes(request.intent)) throw new Error('Sort is incompatible with analysis intent')
   return Object.freeze({ dataset, ...range, metrics: Object.freeze(metrics), ...resolveDerivedMetricOrder(model, metrics),
     dimensions: Object.freeze(dimensions), filters: Object.freeze(filters), ...(comparison === undefined ? {} : { comparison }),
     ...(timeGrain === undefined ? {} : { timeGrain }), ...(sort === undefined ? {} : { sort }), limit, intent: request.intent })

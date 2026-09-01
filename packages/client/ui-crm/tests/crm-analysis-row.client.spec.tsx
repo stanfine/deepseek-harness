@@ -65,7 +65,7 @@ it('shows unavailable reasons beside grouped current, comparison, and change val
   const meta = analysis()
   meta.crmAnalysis.request.metrics = ['sales_amount', 'order_count']
   meta.crmAnalysis.data.request = structuredClone(meta.crmAnalysis.request)
-  meta.crmAnalysis.data.columns.metrics.push({ id: 'order_count', name: '订单数', format: 'number', description: '成交订单', limitations: [] })
+  meta.crmAnalysis.data.columns.metrics.push({ id: 'order_count', name: '订单数', format: 'number', additivity: 'additive', description: '成交订单', limitations: [] })
   meta.crmAnalysis.data.rows[0]!.metrics.sales_amount = { value: null, comparisonValue: 0, changeRatio: null,
     unavailableReason: '本期覆盖不足', changeUnavailableReason: '对比值为零' }
   meta.crmAnalysis.data.rows[0]!.metrics.order_count = { value: 3, comparisonValue: null, changeRatio: null,
@@ -81,7 +81,7 @@ it('uses the table fallback for a two-dimensional result', () => {
   const meta = analysis()
   meta.crmAnalysis.request.dimensions = ['channel', 'store']
   meta.crmAnalysis.data.request = structuredClone(meta.crmAnalysis.request)
-  meta.crmAnalysis.data.columns.dimensions.push({ id: 'store', name: '门店', dataType: 'keyword' })
+  meta.crmAnalysis.data.columns.dimensions.push({ id: 'store', name: '门店', dataType: 'keyword', composition: 'mutually_exclusive' })
   meta.crmAnalysis.data.rows[0]!.dimensions.store = '上海旗舰店'
   meta.crmAnalysis.data.drilldownDimensions = []
   render(<CrmAnalysisRow {...props(meta)} />)
@@ -123,7 +123,7 @@ it('prepares a logical drilldown draft without submitting or exposing source det
   meta.crmAnalysis.request.metrics = ['sales_amount', 'order_count']
   meta.crmAnalysis.request.filters = [{ dimension: 'region', operator: 'equals', values: ['华东'] }]
   meta.crmAnalysis.data.request = structuredClone(meta.crmAnalysis.request)
-  meta.crmAnalysis.data.columns.metrics.push({ id: 'order_count', name: '订单数', format: 'number', description: '成交订单', limitations: [] })
+  meta.crmAnalysis.data.columns.metrics.push({ id: 'order_count', name: '订单数', format: 'number', additivity: 'additive', description: '成交订单', limitations: [] })
   meta.crmAnalysis.data.rows[0]!.metrics.order_count = { value: 3, comparisonValue: 2, changeRatio: 0.5 }
   const inputActions = { setDraft: vi.fn(), submit: vi.fn() }
   const value = props(meta, '', inputActions)

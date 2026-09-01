@@ -41,6 +41,7 @@
           name: 销售额
           dataset: orders
           kind: sum
+          additivity: additive
           field: amount
           format: currency
           description: 原始订单文档中配置金额字段的合计。
@@ -49,6 +50,7 @@
           name: 订单数
           dataset: orders
           kind: count
+          additivity: additive
           format: number
           description: 匹配的原始订单文档数。
           limitations: [订单文档唯一性和过滤口径需由数据所有者确认。]
@@ -56,6 +58,7 @@
           name: 件数
           dataset: orders
           kind: sum
+          additivity: additive
           field: quantity
           format: number
           description: 原始订单文档中配置商品件数字段的合计。
@@ -64,6 +67,7 @@
           name: 购买人数
           dataset: orders
           kind: distinct_count
+          additivity: non_additive
           field: customer
           format: number
           description: 原始订单文档中配置购买者标识的去重计数。
@@ -72,6 +76,7 @@
           name: 客单价
           dataset: orders
           kind: ratio
+          additivity: non_additive
           dependencies: [sales_amount, order_count]
           format: currency
           description: 销售额除以订单数。
@@ -80,6 +85,7 @@
           name: 连带率
           dataset: orders
           kind: ratio
+          additivity: non_additive
           dependencies: [quantity, order_count]
           format: decimal
           description: 件数除以订单数。
@@ -88,6 +94,7 @@
           name: 件单价
           dataset: orders
           kind: ratio
+          additivity: non_additive
           dependencies: [sales_amount, quantity]
           format: currency
           description: 销售额除以件数。
@@ -96,6 +103,7 @@
           name: 购买频次
           dataset: orders
           kind: ratio
+          additivity: non_additive
           dependencies: [order_count, purchaser_count]
           format: decimal
           description: 订单数除以购买人数。
@@ -104,6 +112,7 @@
           name: 人均消费
           dataset: orders
           kind: ratio
+          additivity: non_additive
           dependencies: [sales_amount, purchaser_count]
           format: currency
           description: 销售额除以购买人数。
@@ -112,6 +121,7 @@
           name: 复购
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: number
           description: 复购指标。
           limitations: [当前配置未声明复购业务定义和完整历史数据。]
@@ -119,6 +129,7 @@
           name: 生命周期
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: number
           description: 生命周期指标。
           limitations: [当前配置未声明生命周期分群定义和完整历史数据。]
@@ -126,6 +137,7 @@
           name: 流量转化
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: decimal
           description: 流量转化指标。
           limitations: [当前配置没有访问流量数据源和归因定义。]
@@ -133,6 +145,7 @@
           name: 活动归因
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: decimal
           description: 活动归因指标。
           limitations: [当前配置没有活动归因规则和来源数据。]
@@ -140,6 +153,7 @@
           name: 目标达成
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: decimal
           description: 目标达成指标。
           limitations: [当前配置没有目标值数据源和业务口径。]
@@ -147,6 +161,7 @@
           name: 成本
           dataset: orders
           kind: unavailable
+          additivity: non_additive
           format: currency
           description: 成本指标。
           limitations: [当前配置没有成本数据源和分摊口径。]
@@ -156,6 +171,7 @@
           dataset: orders
           field: channel
           dataType: keyword
+          composition: mutually_exclusive
           filters: [equals, in]
           description: 原始订单文档中配置的渠道。
           limitations: [原始订单文档不等同于去重订单。]
@@ -164,6 +180,7 @@
           dataset: orders
           field: store
           dataType: keyword
+          composition: mutually_exclusive
           filters: [equals, in]
           description: 原始订单文档中配置的门店。
           limitations: [原始订单文档不等同于去重订单。]
@@ -172,6 +189,7 @@
           dataset: orders
           field: subchannel
           dataType: keyword
+          composition: mutually_exclusive
           filters: [equals, in]
           description: 原始订单文档中配置的子渠道。
           limitations: [原始订单文档不等同于去重订单。]
@@ -180,6 +198,7 @@
           dataset: orders
           field: storeType
           dataType: keyword
+          composition: mutually_exclusive
           filters: [equals, in]
           description: 原始订单文档中配置的门店类型。
           limitations: [原始订单文档不等同于去重订单。]
@@ -188,6 +207,7 @@
           dataset: orders
           field: orderType
           dataType: keyword
+          composition: mutually_exclusive
           filters: [equals, in]
           description: 原始订单文档中配置的订单类型。
           limitations: [原始订单文档不等同于去重订单。]
@@ -196,6 +216,7 @@
           dataset: orders
           field: time
           dataType: date
+          composition: high_cardinality
           filters: [equals, in]
           timeGrains: [day, week, month]
           description: 订单日期。
@@ -205,6 +226,7 @@
           dataset: orders
           field: time
           dataType: date
+          composition: high_cardinality
           filters: [equals, in]
           timeGrains: [week]
           description: 订单日期按自然周分组。
@@ -214,6 +236,7 @@
           dataset: orders
           field: time
           dataType: date
+          composition: high_cardinality
           filters: [equals, in]
           timeGrains: [month]
           description: 订单日期按自然月分组。

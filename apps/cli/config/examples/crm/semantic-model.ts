@@ -16,6 +16,7 @@ interface MetricBase {
   format: MetricFormat
   description: string
   limitations: readonly string[]
+  additivity?: 'additive' | 'non_additive'
 }
 
 /** Sum a configured numeric logical field. */
@@ -57,6 +58,7 @@ export interface DimensionDefinition {
   timeGrains?: readonly TimeGrain[]
   description: string
   limitations: readonly string[]
+  composition?: 'mutually_exclusive' | 'overlapping' | 'high_cardinality'
 }
 
 /** Deployment-owned business definitions and analysis limits. */
@@ -132,6 +134,14 @@ function validateMetric(definition: MetricDefinition, datasets: Record<string, D
   const kind = definition.kind as string
   if (!metricKinds.has(kind)) throw new Error(`Unknown metric kind ${kind}`)
   validateCommon(definition)
+  const common = ['id', 'name', 'dataset', 'kind', 'format', 'description', 'limitations', 'additivity']
+  const allowed = new Set([...common, ...(definition.kind === 'sum' || definition.kind === 'distinct_count' ? ['field']
+    : definition.kind === 'ratio' ? ['dependencies'] : [])])
+  const incompatible = Object.entries(definition).filter(([key, value]) => value !== undefined
+    && !(key === 'dependencies' && Array.isArray(value) && value.length === 0) && !allowed.has(key)).map(([key]) => key)
+  if (incompatible.length > 0) throw new Error(`Invalid metric definition keys: ${incompatible.join(', ')}`)
+  const expectedAdditivity = definition.kind === 'sum' || definition.kind === 'count' ? 'additive' : 'non_additive'
+  if (definition.additivity !== undefined && definition.additivity !== expectedAdditivity) throw new Error('Invalid metric additivity')
   if (!Object.hasOwn(datasets, definition.dataset)) throw new Error(`Unknown metric dataset ${definition.dataset}`)
   switch (definition.kind) {
     case 'sum':
@@ -165,6 +175,9 @@ function validateDimension(definition: DimensionDefinition, datasets: Record<str
     }
   } else if (definition.timeGrains?.length) throw new Error('Only date dimensions support time grains')
   if (!Array.isArray(definition.limitations) || definition.limitations.some(limitation => !validText(limitation))) throw new Error('Invalid dimension limitations')
+  if (definition.composition !== undefined && !['mutually_exclusive', 'overlapping', 'high_cardinality'].includes(definition.composition)) {
+    throw new Error('Invalid dimension composition semantics')
+  }
 }
 
 function dependencies(definition: MetricDefinition): readonly string[] {
@@ -222,12 +235,13 @@ function immutableMap<T>(entries: readonly (readonly [string, T])[]): ReadonlyMa
 function catalogMetric(definition: MetricDefinition): JsonValue {
   return { id: definition.id, name: definition.name, dataset: definition.dataset, format: definition.format,
     kind: definition.kind, available: definition.kind !== 'unavailable', description: definition.description,
-    dependencies: [...dependencies(definition)], limitations: [...definition.limitations] }
+    dependencies: [...dependencies(definition)], additivity: definition.additivity ?? (definition.kind === 'sum' || definition.kind === 'count' ? 'additive' : 'non_additive'), limitations: [...definition.limitations] }
 }
 
 function catalogDimension(definition: DimensionDefinition): JsonValue {
   return { id: definition.id, name: definition.name, dataset: definition.dataset, dataType: definition.dataType,
     filters: [...definition.filters], ...(definition.timeGrains === undefined ? {} : { timeGrains: [...definition.timeGrains] }),
+    composition: definition.composition ?? (definition.dataType === 'keyword' ? 'mutually_exclusive' : 'high_cardinality'),
     description: definition.description, limitations: [...definition.limitations] }
 }
 
