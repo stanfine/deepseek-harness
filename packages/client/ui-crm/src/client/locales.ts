@@ -23,6 +23,7 @@ export const zh = {
   existingNew: '现有新客', retained: '留存客', winback: '回流客', cohortBase: '基数', weeklyActive: '本周活跃', newPurchasers: '本周新客', requiredRange: '所需范围',
   sourceCoverage: '数据源覆盖', missingTime: '缺失时间文档', bottlesPerOrder: '瓶单数',
   excelReady: 'Excel 周报已生成', downloadExcel: '下载 Excel', excelExpires: '下载有效期至',
+  analysisCurrent: '本期', analysisComparison: '对比期',
 } satisfies Record<string, string>
 /** Closed CRM locale keys. */
 export type CrmKey = keyof typeof zh
@@ -49,4 +50,5 @@ export const en = {
   existingNew: 'Existing new', retained: 'Retained', winback: 'Win-back', cohortBase: 'Base', weeklyActive: 'Active this week', newPurchasers: 'New purchasers', requiredRange: 'required',
   sourceCoverage: 'Source coverage', missingTime: 'Records missing time', bottlesPerOrder: 'Items per order',
   excelReady: 'Excel weekly report is ready', downloadExcel: 'Download Excel', excelExpires: 'Download expires',
+  analysisCurrent: 'Current', analysisComparison: 'Comparison',
 } satisfies Record<CrmKey, string>
