@@ -73,7 +73,24 @@ it('mounts the CRM example through the Web session controller', async () => {
     expect(JSON.stringify(result)).not.toContain('fixture-password')
     const metricCatalog = await scaffold.ctx.tools.execute({ agent, name: 'crm_metric_catalog', arguments: {},
       callId: ToolCallId('crm-web-metrics'), signal: new AbortController().signal })
-    expect((metricCatalog.value as { metrics: Array<{ id: string }> }).metrics.map(metric => metric.id)).toContain('sales_amount')
+    const catalogMetrics = (metricCatalog.value as { metrics: Array<{ id: string; dataset: string; limitations: string[] }> }).metrics
+    expect(catalogMetrics.map(metric => metric.id)).toContain('sales_amount')
+    for (const id of ['atv', 'items_per_order', 'frequency', 'amount_per_purchaser']) {
+      const limitations = catalogMetrics.find(metric => metric.id === id)?.limitations.join(' ') ?? ''
+      expect(limitations, id).toMatch(/订单文档唯一性/)
+    }
+    expect(catalogMetrics.find(metric => metric.id === 'atv')?.limitations.join(' ')).toMatch(/退款.*取消.*币种/)
+    expect(catalogMetrics.find(metric => metric.id === 'items_per_order')?.limitations.join(' ')).toMatch(/件数口径和退货处理/)
+    expect(catalogMetrics.find(metric => metric.id === 'frequency')?.limitations.join(' ')).toMatch(/购买者标识/)
+    expect(catalogMetrics.find(metric => metric.id === 'amount_per_purchaser')?.limitations.join(' ')).toMatch(/购买者标识/)
+    const dimensionCatalog = await scaffold.ctx.tools.execute({ agent, name: 'crm_dimension_catalog', arguments: {},
+      callId: ToolCallId('crm-web-dimensions'), signal: new AbortController().signal })
+    const catalogDimensions = (dimensionCatalog.value as { dimensions: Array<{ dataset: string }> }).dimensions
+    for (const dimension of catalogDimensions) {
+      expect(catalogMetrics.some(metric => metric.dataset === dimension.dataset && metric.id !== 'repeat_purchase'
+        && !['lifecycle', 'traffic_conversion', 'campaign_attribution', 'target_completion', 'cost'].includes(metric.id)),
+      `dimension dataset ${dimension.dataset}`).toBe(true)
+    }
     const analysis = await scaffold.ctx.tools.execute({ agent, name: 'crm_analyze', arguments: {
       metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], start: '2025-01-01', end: '2025-02-01',
       comparison: 'previous_period', intent: 'comparison', limit: 10,
@@ -83,6 +100,12 @@ it('mounts the CRM example through the Web session controller', async () => {
       request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], comparison: 'previous_period' },
       data: { version: 1, rows: [{ dimensions: { channel: 'pos' } }, { dimensions: { channel: 'online' } }],
         completeness: { complete: false }, warnings: [expect.stringContaining('outside the returned terms buckets')] } } })
+    type AnalysisColumns = { crmAnalysis: { data: { columns: {
+      metrics: Array<{ id: string; limitations: string[] }>
+    } } } }
+    const resultColumns = (analysis.meta as AnalysisColumns)
+      .crmAnalysis.data.columns.metrics
+    expect(resultColumns.find(metric => metric.id === 'atv')?.limitations.join(' ')).toMatch(/订单文档唯一性.*退款.*币种/)
     const drilldown = await scaffold.ctx.tools.execute({ agent, name: 'crm_drilldown', arguments: {
       metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], drilldownDimension: 'store',
       parentFilters: [{ dimension: 'channel', values: ['pos'] }], start: '2025-01-01', end: '2025-02-01',

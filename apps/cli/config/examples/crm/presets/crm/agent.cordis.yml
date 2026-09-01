@@ -75,7 +75,7 @@
           dependencies: [sales_amount, order_count]
           format: currency
           description: 销售额除以订单数。
-          limitations: [订单数为零时无法计算。]
+          limitations: [订单数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会同时影响销售额和订单数。, 销售额的退款、取消和币种口径未经确认。]
         - id: items_per_order
           name: 连带率
           dataset: orders
@@ -83,7 +83,7 @@
           dependencies: [quantity, order_count]
           format: decimal
           description: 件数除以订单数。
-          limitations: [订单数为零时无法计算。]
+          limitations: [订单数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会影响订单数。, 件数口径和退货处理未经确认。]
         - id: amount_per_item
           name: 件单价
           dataset: orders
@@ -91,7 +91,7 @@
           dependencies: [sales_amount, quantity]
           format: currency
           description: 销售额除以件数。
-          limitations: [件数为零时无法计算。]
+          limitations: [件数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会影响销售额和件数。, 销售额的退款、取消和币种口径未经确认。, 件数口径和退货处理未经确认。]
         - id: frequency
           name: 购买频次
           dataset: orders
@@ -99,7 +99,7 @@
           dependencies: [order_count, purchaser_count]
           format: decimal
           description: 订单数除以购买人数。
-          limitations: [购买人数为零时无法计算。]
+          limitations: [购买人数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会影响订单数。, 缺失购买者标识的记录不计入人数。]
         - id: amount_per_purchaser
           name: 人均消费
           dataset: orders
@@ -107,7 +107,7 @@
           dependencies: [sales_amount, purchaser_count]
           format: currency
           description: 销售额除以购买人数。
-          limitations: [购买人数为零时无法计算。]
+          limitations: [购买人数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会影响销售额。, 销售额的退款、取消和币种口径未经确认。, 缺失购买者标识的记录不计入人数。]
         - id: repeat_purchase
           name: 复购
           dataset: orders
@@ -218,30 +218,6 @@
           timeGrains: [month]
           description: 订单日期按自然月分组。
           limitations: [日期覆盖范围不证明历史完整。]
-        - id: province
-          name: 省份
-          dataset: order_facts
-          field: province
-          dataType: keyword
-          filters: [equals, in]
-          description: 订单事实表中配置的省份。
-          limitations: []
-        - id: series
-          name: 系列
-          dataset: order_items
-          field: series
-          dataType: keyword
-          filters: [equals, in]
-          description: 商品行宽表中配置的产品系列。
-          limitations: [商品行文档不等同于订单。]
-        - id: sku
-          name: SKU
-          dataset: order_items
-          field: sku
-          dataType: keyword
-          filters: [equals, in]
-          description: 商品行宽表中配置的 SKU。
-          limitations: [商品行文档不等同于订单。]
     report:
       fiscalYearStartMonth: 4
       orderFactsDataset: order_facts

@@ -76,6 +76,138 @@
       {
         "type": "tool-call-delta",
         "index": 0,
+        "id": "crm_metric_catalog_1",
+        "name": "crm_metric_catalog",
+        "argumentsDelta": "{}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_metric_catalog_1",
+          "name": "crm_metric_catalog",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_dimension_catalog_1",
+        "name": "crm_dimension_catalog",
+        "argumentsDelta": "{}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_dimension_catalog_1",
+          "name": "crm_dimension_catalog",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_analyze_1",
+        "name": "crm_analyze",
+        "argumentsDelta": "{\"metrics\":[\"sales_amount\",\"order_count\",\"atv\"],\"dimensions\":[\"channel\"],\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"comparison\":\"previous_period\",\"intent\":\"comparison\",\"limit\":10}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_analyze_1",
+          "name": "crm_analyze",
+          "arguments": "{\"metrics\":[\"sales_amount\",\"order_count\",\"atv\"],\"dimensions\":[\"channel\"],\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"comparison\":\"previous_period\",\"intent\":\"comparison\",\"limit\":10}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "crm_drilldown_1",
+        "name": "crm_drilldown",
+        "argumentsDelta": "{\"metrics\":[\"sales_amount\",\"order_count\",\"atv\"],\"dimensions\":[\"channel\"],\"drilldownDimension\":\"store\",\"parentFilters\":[{\"dimension\":\"channel\",\"values\":[\"pos\"]}],\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"comparison\":\"previous_period\",\"intent\":\"comparison\",\"limit\":10}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "crm_drilldown_1",
+          "name": "crm_drilldown",
+          "arguments": "{\"metrics\":[\"sales_amount\",\"order_count\",\"atv\"],\"dimensions\":[\"channel\"],\"drilldownDimension\":\"store\",\"parentFilters\":[{\"dimension\":\"channel\",\"values\":[\"pos\"]}],\"start\":\"2025-03-01\",\"end\":\"2025-04-01\",\"comparison\":\"previous_period\",\"intent\":\"comparison\",\"limit\":10}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
         "id": "crm_profile_1",
         "name": "crm_profile",
         "argumentsDelta": "{\"dataset\": \"orders\"}"

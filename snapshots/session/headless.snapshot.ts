@@ -512,7 +512,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   }
 }
 
+const forbiddenSemanticArguments = new Set(['index', 'field', 'script', 'formula', 'dsl', 'path'])
+
+function forbiddenSemanticArgumentKeys(value: unknown): string[] {
+  if (value === null || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([key, child]) => [
+    ...(forbiddenSemanticArguments.has(key.toLowerCase()) ? [key.toLowerCase()] : []),
+    ...forbiddenSemanticArgumentKeys(child),
+  ])
+}
+
 describe('headless recorded-session snapshots', () => {
+  it('detects one forbidden physical semantic-tool argument', () => {
+    expect(forbiddenSemanticArgumentKeys({ properties: { field: { type: 'string' } } })).toEqual(['field'])
+  })
+
   it('pins the closed CRM semantic tools without physical query arguments', async () => {
     const snapshot = parseToolSchemasSnapshot(await readFile(
       join(snapshotsRoot, 'crm-catalog', 'tool-schemas.expected.json'), 'utf8',
@@ -521,11 +535,21 @@ describe('headless recorded-session snapshots', () => {
     const names = ['crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown']
     const semantic = tools.filter(tool => names.includes(String(tool.name)))
     expect(semantic.map(tool => tool.name).sort()).toEqual(names.toSorted())
-    const keys = (value: unknown): string[] => value !== null && typeof value === 'object'
-      ? Object.entries(value).flatMap(([key, child]) => [key, ...keys(child)])
-      : []
-    expect(keys(semantic.map(tool => tool.parameters)).map(key => key.toLowerCase()))
-      .not.toEqual(expect.arrayContaining(['index', 'field', 'script', 'formula', 'dsl', 'path']))
+    expect(forbiddenSemanticArgumentKeys(semantic.map(tool => tool.parameters))).toEqual([])
+  })
+
+  it('replays CRM semantic comparison and drilldown metadata', async () => {
+    const events = (await readFile(join(snapshotsRoot, 'crm-catalog', 'session.jsonl'), 'utf8')).trim().split('\n')
+      .map(line => JSON.parse(line) as { type?: string; data?: { message?: { source?: { callId?: string } }; meta?: unknown } })
+    const resultMeta = (callId: string): unknown => events.find(event => event.type === 'tool/result'
+      && event.data?.message?.source?.callId === callId)?.data?.meta
+    expect(resultMeta('crm_analyze_1')).toMatchObject({ crmAnalysis: { version: 1,
+      request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], comparison: 'previous_period' },
+      data: { warnings: [expect.stringContaining('outside the returned terms buckets'),
+        expect.stringContaining('no matching comparison bucket')] } } })
+    expect(resultMeta('crm_drilldown_1')).toMatchObject({ crmAnalysis: { version: 1,
+      request: { dimensions: ['channel', 'store'], filters: [{ dimension: 'channel', values: ['pos'] }] },
+      data: { rows: [{ dimensions: { channel: 'pos', store: 'S-001' } }] } } })
   })
 
   it('gives every composition and header class exactly one pin', () => {

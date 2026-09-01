@@ -14,12 +14,26 @@ export async function apply(ctx) {
       response.end()
       return
     }
-    const filtered = body.query.bool.filter.some(filter => filter.term?.channelId === 'pos')
+    const filtered = body.query.bool.filter.some(filter => filter.term?.channelId === 'pos'
+      || filter.terms?.channelId?.includes('pos'))
     const count = filtered ? 2 : 3
+    const group = (key, amount, documents) => ({ key, doc_count: documents, m0: { value: amount } })
+    const semanticGroups = filtered
+      ? [{ key: 'pos', doc_count: 2, d1: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0,
+        buckets: [group('S-001', 100, 2)] }, d1_missing: { doc_count: 0 } }]
+      : [group('pos', 100, 2), group('online', 20, 1)]
+    const semanticWindow = (comparison) => ({ doc_count: comparison ? 1 : count, m0: { value: comparison ? 40 : filtered ? 100 : 120 },
+      d0: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0, buckets: comparison
+        ? (filtered ? [{ key: 'pos', doc_count: 1, d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+          buckets: [group('S-001', 40, 1)] }, d1_missing: { doc_count: 0 } }] : [group('pos', 40, 1)])
+        : semanticGroups }, d0_missing: { doc_count: 0 } })
     response.setHeader('Content-Type', 'application/json')
     response.end(JSON.stringify({
       timed_out: false, _shards: { failed: 0 }, hits: { total: { value: count, relation: 'eq' }, hits: [] },
-      aggregations: body.aggs?.earliest ? {
+      aggregations: body.aggs?.current ? {
+        source_coverage: { value: Date.parse('2025-02-01T00:00:00Z') },
+        current: semanticWindow(false), comparison: semanticWindow(true),
+      } : body.aggs?.earliest ? {
         earliest: { value: Date.parse('2025-02-01T00:00:00Z') },
         latest: { value: Date.parse('2025-03-31T12:00:00Z') }, missingTime: { doc_count: 0 },
       } : body.aggs?.groups ? { missingDimension: { doc_count: 0 }, groups: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,

@@ -94,6 +94,13 @@ describe('CRM semantic model', () => {
     expect(JSON.stringify([model.metricCatalog(), model.dimensionCatalog()])).not.toMatch(/private_(amount|customer|order_date|province)/)
   })
 
+  it('rejects a dimension whose dataset has no available metric', () => {
+    const config = semanticConfig()
+    config.dimensions.push({ id: 'series', name: '系列', dataset: 'items', field: 'series', dataType: 'keyword',
+      filters: ['equals', 'in'], description: 'Configured series.', limitations: [] })
+    expect(() => resolveSemanticModel(config, datasets)).toThrow(/Dimension dataset items has no available metric/)
+  })
+
   it('does not expose mutable lookup maps through forEach', () => {
     const config = semanticConfig()
     const model = resolveSemanticModel(config, datasets)

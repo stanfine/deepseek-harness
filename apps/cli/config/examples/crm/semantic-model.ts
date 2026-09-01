@@ -262,6 +262,13 @@ export function resolveSemanticModel(config: SemanticConfig, datasets: Record<st
     dimensions.set(definition.id, freezeDimension(definition))
   }
   validateDependencies(metrics)
+  const availableMetricDatasets = new Set([...metrics.values()]
+    .filter(definition => definition.kind !== 'unavailable').map(definition => definition.dataset))
+  for (const definition of dimensions.values()) {
+    if (!availableMetricDatasets.has(definition.dataset)) {
+      throw new Error(`Dimension dataset ${definition.dataset} has no available metric`)
+    }
+  }
   const limits = Object.freeze({ maxSelectedMetrics: config.maxSelectedMetrics, maxDimensions: config.maxDimensions,
     maxFilters: config.maxFilters, maxTopN: config.maxTopN, maxFilterValues: config.maxFilterValues,
     maxInputChars: config.maxInputChars, maxRequestBytes: config.maxRequestBytes, timeGrains: Object.freeze([...config.timeGrains]) })
