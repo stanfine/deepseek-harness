@@ -513,6 +513,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
 }
 
 describe('headless recorded-session snapshots', () => {
+  it('pins the closed CRM semantic tools without physical query arguments', async () => {
+    const snapshot = parseToolSchemasSnapshot(await readFile(
+      join(snapshotsRoot, 'crm-catalog', 'tool-schemas.expected.json'), 'utf8',
+    ))
+    const tools = snapshot.initial as Array<{ name?: unknown; parameters?: unknown }>
+    const names = ['crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown']
+    const semantic = tools.filter(tool => names.includes(String(tool.name)))
+    expect(semantic.map(tool => tool.name).sort()).toEqual(names.toSorted())
+    const keys = (value: unknown): string[] => value !== null && typeof value === 'object'
+      ? Object.entries(value).flatMap(([key, child]) => [key, ...keys(child)])
+      : []
+    expect(keys(semantic.map(tool => tool.parameters)).map(key => key.toLowerCase()))
+      .not.toEqual(expect.arrayContaining(['index', 'field', 'script', 'formula', 'dsl', 'path']))
+  })
+
   it('gives every composition and header class exactly one pin', () => {
     for (const scenario of scenarios) {
       expect(ownerOf(scenario), `${scenario.name}: composition owner`).toBeDefined()

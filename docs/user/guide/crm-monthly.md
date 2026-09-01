@@ -37,6 +37,16 @@ To export the result, ask: `把这份周报和建议导出为 Excel。` After th
 
 For follow-up drilldown, ask: `保持相同月份，查看 pos 渠道的门店贡献，并展示有限条脱敏明细。` Tool calls and their results use the existing session log and CRM chart cards. The preset adds no Shell, arbitrary HTTP, filesystem editor, or general database query tool.
 
+## Ask flexible business questions
+
+For an analysis outside the fixed weekly or monthly layout, ask with business metric and dimension names. For example: `比较 2025 年 4 月与上月的渠道销售额、订单数和客单价，按销售额排序；选择 pos 后继续下钻门店。` The Agent first inspects `crm_metric_catalog` and `crm_dimension_catalog`, then calls `crm_analyze`. Selecting a returned channel prepares a reviewed follow-up; submitting it lets the Agent call `crm_drilldown` with the same dates, metrics, comparison, filters and selected parent value.
+
+The initial catalog includes sales amount, order count, quantity, purchaser count, average transaction value, items per order, amount per item, purchase frequency and amount per purchaser. It supports day, week, month, channel, subchannel, store, store type and order type on the source that owns those concepts; product series and SKU belong to the line-item source. The result records current and comparison values, unavailable reasons, coverage, omitted groups, count errors and permitted next dimensions. The Client validates this persisted result and selects KPI, line, horizontal-bar, comparison-bar, donut or table views deterministically. The model cannot supply source fields, Elasticsearch DSL, formulas or ECharts options.
+
+An unavailable catalog entry is a governed refusal, not a zero. Repeat purchase, lifecycle, traffic conversion, campaign attribution, targets and costs remain unavailable until deployment configuration declares both their business definition and adequate source coverage. A warning about missing dimensions, Top N truncation, approximate counts or missing comparison history stays visible in the chart card and must also appear in the narrative recommendation.
+
+One semantic request reads one logical dataset. The current source can answer channel and store questions from bounded order documents and can answer fixed weekly additive facts from their dedicated source, but it does not join those datasets inside one semantic request. Data that is distributed across CRM, commerce, traffic, campaign or cost systems can still support separate source-backed sections without a warehouse. Cross-system customer identity, attribution, shared metric definitions, time alignment and reconciled totals require governed mappings or a provider that implements those rules; the Agent must not infer a join from matching field names.
+
 ## Configure data and limits
 
 The [preset composition](../../../apps/cli/config/examples/crm/presets/crm/agent.cordis.yml) maps `orders` to `mkt_catering_loyalty_behavior_consumer_order` and `members` to `mkt_catering_loyalty_customer`. Dates use an explicit UTC offset; the end date is exclusive. The [business Skill](../../../apps/cli/config/examples/crm/skills/beauty-crm-monthly/SKILL.md) owns metric definitions and reporting rules.

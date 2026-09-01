@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/guide/crm-monthly.md
-crm-monthly.md: bd23fc6499f82868ae4f7d19b6c1ae20d7596ae4
-crm-monthly.zh.md: b205eb2646093a7e6789a4834fbcce1eb444d285
+crm-monthly.md: 0ed3c12c842e92b890c647744a01eda9b0e102b4
+crm-monthly.zh.md: 5549d78aa958ec8c128f12950e18735de27368d7

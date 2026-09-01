@@ -37,7 +37,7 @@ Chart-mark clicks and table buttons prepare a JSON-scoped follow-up through stan
 
 #### What the model sees
 
-The model sees the original CRM tool result. A semantic drilldown click prepares a localized draft containing only dates, metric ids, business filters, parent dimension values, the selected value, and the next business dimension. The click does not submit it; the model sees the draft only after the user reviews and sends it. Physical fields, index names, query DSL, chart geometry, and chart selection stay out of the draft.
+The model sees the original CRM tool result. A semantic drilldown click prepares a localized `crm_drilldown` draft containing only dates, metric ids, business filters, parent dimension values, the selected value, and the next business dimension. The click does not submit it; the model sees the draft only after the user reviews and sends it. Physical fields, index names, query DSL, chart geometry, and chart selection stay out of the draft.
 
 #### Token effect
 

@@ -10,11 +10,30 @@ it('mounts the CRM example through the Web session controller', async () => {
   const server = createServer((request, response) => {
     void (async () => {
       let text = ''; for await (const chunk of request) text += String(chunk)
-      const body = JSON.parse(text) as { aggs?: Record<string, unknown> }
+      const body = JSON.parse(text) as { aggs?: { current?: { aggs?: { d0?: { terms?: { field?: string } } & { aggs?: {
+        d1?: { terms?: { field?: string } }
+      } } } } } }
       if (!body.aggs?.current) { response.writeHead(400); response.end(); return }
+      const groupedField = body.aggs.current.aggs?.d0?.terms?.field
+      const nestedField = body.aggs.current.aggs?.d0?.aggs?.d1?.terms?.field
+      const group = (key: string, amount: number, count: number) => ({ key, doc_count: count, m0: { value: amount } })
+      const window = (groups?: Array<{ key: string; doc_count: number }>) => groups === undefined
+        ? { doc_count: 4, m0: { value: 100 } }
+        : { doc_count: groups.reduce((total, item) => total + item.doc_count, 0),
+          d0: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0, buckets: groups }, d0_missing: { doc_count: 0 } }
+      const nested = (amounts: [number, number]) => [{ key: 'pos', doc_count: 3,
+        d1: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0,
+          buckets: [group('S-001', amounts[0], 2), group('S-002', amounts[1], 1)] }, d1_missing: { doc_count: 0 } }]
+      const currentGroups = nestedField === 'store.storeCode' ? nested([60, 20]) : groupedField === 'store.storeCode'
+        ? [group('S-001', 60, 2), group('S-002', 20, 1)]
+        : groupedField === 'channelId' ? [group('pos', 80, 3), group('online', 20, 1)] : undefined
+      const comparisonGroups = nestedField === 'store.storeCode' ? nested([40, 10]) : groupedField === 'store.storeCode'
+        ? [group('S-001', 40, 2), group('S-002', 10, 1)]
+        : groupedField === 'channelId' ? [group('pos', 50, 2), group('online', 25, 1)] : undefined
       response.end(JSON.stringify({ timed_out: false, _shards: { failed: 0 },
         hits: { total: { value: 2, relation: 'eq' }, hits: [] }, aggregations: {
-          source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') }, current: { doc_count: 2, m0: { value: 100 } },
+          source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') }, current: window(currentGroups),
+          comparison: window(comparisonGroups),
         } }))
     })().catch(() => { response.writeHead(500); response.end() })
   })
@@ -56,11 +75,27 @@ it('mounts the CRM example through the Web session controller', async () => {
       callId: ToolCallId('crm-web-metrics'), signal: new AbortController().signal })
     expect((metricCatalog.value as { metrics: Array<{ id: string }> }).metrics.map(metric => metric.id)).toContain('sales_amount')
     const analysis = await scaffold.ctx.tools.execute({ agent, name: 'crm_analyze', arguments: {
-      metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01', intent: 'summary',
+      metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], start: '2025-01-01', end: '2025-02-01',
+      comparison: 'previous_period', intent: 'comparison', limit: 10,
     }, callId: ToolCallId('crm-web-analysis'), signal: new AbortController().signal })
     expect(analysis.isError).toBe(false)
-    expect(analysis.meta).toMatchObject({ crmAnalysis: { version: 1, request: { metrics: ['sales_amount'], intent: 'summary' },
-      data: { version: 1, rows: [{ metrics: { sales_amount: { value: 100 } } }] } } })
+    expect(analysis.meta).toMatchObject({ crmAnalysis: { version: 1,
+      request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], comparison: 'previous_period' },
+      data: { version: 1, rows: [{ dimensions: { channel: 'pos' } }, { dimensions: { channel: 'online' } }],
+        completeness: { complete: false }, warnings: [expect.stringContaining('outside the returned terms buckets')] } } })
+    const drilldown = await scaffold.ctx.tools.execute({ agent, name: 'crm_drilldown', arguments: {
+      metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], drilldownDimension: 'store',
+      parentFilters: [{ dimension: 'channel', values: ['pos'] }], start: '2025-01-01', end: '2025-02-01',
+      comparison: 'previous_period', intent: 'comparison', limit: 10,
+    }, callId: ToolCallId('crm-web-drilldown'), signal: new AbortController().signal })
+    expect(drilldown.isError, JSON.stringify(drilldown)).toBe(false)
+    expect(drilldown.meta).toMatchObject({ crmAnalysis: { version: 1,
+      request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel', 'store'],
+        filters: [{ dimension: 'channel', operator: 'in', values: ['pos'] }] } } })
+    expect((drilldown.meta as { crmAnalysis: { data: { rows: Array<{ dimensions: Record<string, string> }> } } })
+      .crmAnalysis.data.rows.map(row => row.dimensions)).toEqual([
+      { channel: 'pos', store: 'S-001' }, { channel: 'pos', store: 'S-002' },
+    ])
     const skill = await scaffold.ctx.tools.execute({ agent, name: 'skill', arguments: { name: 'beauty-crm-monthly' }, callId: ToolCallId('crm-web-skill'), signal: new AbortController().signal })
     expect(skill.isError).toBe(false)
     expect(JSON.stringify(skill)).toContain('crm_query')

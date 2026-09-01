@@ -66,11 +66,297 @@
       }
     },
     {
+      "name": "crm_analyze",
+      "description": "Calculate bounded CRM aggregates from configured business metrics and dimensions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "description": "One to 5 catalog metric ids.",
+            "items": {
+              "type": "string",
+              "description": "Catalog id, at most 128 characters."
+            }
+          },
+          "dimensions": {
+            "type": "array",
+            "description": "At most 2 catalog dimension ids.",
+            "items": {
+              "type": "string",
+              "description": "Catalog id, at most 128 characters."
+            }
+          },
+          "start": {
+            "type": "string",
+            "description": "Inclusive YYYY-MM-DD business date."
+          },
+          "end": {
+            "type": "string",
+            "description": "Exclusive YYYY-MM-DD business date."
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "trend",
+              "ranking",
+              "composition",
+              "comparison"
+            ]
+          },
+          "filters": {
+            "type": "array",
+            "description": "At most 10 closed filters; text is limited to 128 characters.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "description": "Catalog id, at most 128 characters."
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "equals",
+                    "in"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "array",
+                  "description": "At most 20 values.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "dimension",
+                "operator"
+              ]
+            }
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "none",
+              "previous_period",
+              "prior_year"
+            ]
+          },
+          "timeGrain": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "sort": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "metric": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "metric",
+              "direction"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Positive integer no greater than 20."
+          }
+        },
+        "required": [
+          "metrics",
+          "start",
+          "end",
+          "intent"
+        ]
+      }
+    },
+    {
       "name": "crm_catalog",
       "description": "List CRM logical datasets, dimensions, semantics and query limits. No credentials or raw records.",
       "parameters": {
         "type": "object",
         "properties": {}
+      }
+    },
+    {
+      "name": "crm_dimension_catalog",
+      "description": "List configured CRM analysis dimensions, supported filters, and limits.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "crm_drilldown",
+      "description": "Continue a CRM aggregate by adding one configured dimension to selected parent values.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "description": "One to 5 catalog metric ids.",
+            "items": {
+              "type": "string",
+              "description": "Catalog id, at most 128 characters."
+            }
+          },
+          "dimensions": {
+            "type": "array",
+            "description": "At most 2 catalog dimension ids.",
+            "items": {
+              "type": "string",
+              "description": "Catalog id, at most 128 characters."
+            }
+          },
+          "start": {
+            "type": "string",
+            "description": "Inclusive YYYY-MM-DD business date."
+          },
+          "end": {
+            "type": "string",
+            "description": "Exclusive YYYY-MM-DD business date."
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "trend",
+              "ranking",
+              "composition",
+              "comparison"
+            ]
+          },
+          "filters": {
+            "type": "array",
+            "description": "At most 10 closed filters; text is limited to 128 characters.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "description": "Catalog id, at most 128 characters."
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "equals",
+                    "in"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "array",
+                  "description": "At most 20 values.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "dimension",
+                "operator"
+              ]
+            }
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "none",
+              "previous_period",
+              "prior_year"
+            ]
+          },
+          "timeGrain": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "sort": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "metric": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "metric",
+              "direction"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Positive integer no greater than 20."
+          },
+          "drilldownDimension": {
+            "type": "string",
+            "description": "Catalog id, at most 128 characters."
+          },
+          "parentFilters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "description": "Catalog id, at most 128 characters."
+                },
+                "values": {
+                  "type": "array",
+                  "description": "At most 20 selected parent values.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "dimension",
+                "values"
+              ]
+            }
+          }
+        },
+        "required": [
+          "metrics",
+          "start",
+          "end",
+          "intent",
+          "drilldownDimension",
+          "parentFilters"
+        ]
       }
     },
     {
@@ -136,6 +422,14 @@
         "required": [
           "date"
         ]
+      }
+    },
+    {
+      "name": "crm_metric_catalog",
+      "description": "List configured CRM business metrics, meanings, availability, and limits.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
       }
     },
     {
