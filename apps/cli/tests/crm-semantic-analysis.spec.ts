@@ -431,11 +431,13 @@ describe('CRM semantic analysis executor', () => {
   it('marks partial sum coverage and its derived ratio unavailable in grouped comparisons', async () => {
     const endpoint = await fixture((_request, response) => response.end(JSON.stringify(elastic({
       source_coverage: { value: Date.parse('2024-01-01T16:30:00Z') },
-      current: { doc_count: 2, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
+      current: { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
         { key: 'online', doc_count: 2, m0: { value: 100 }, m0_missing: { doc_count: 1 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
+        { key: 'store', doc_count: 1, m0: { value: 0 }, m0_missing: { doc_count: 1 }, m1: { value: 1 }, m1_missing: { doc_count: 0 } },
       ] }, d0_missing: { doc_count: 0 } },
-      comparison: { doc_count: 2, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
+      comparison: { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
         { key: 'online', doc_count: 2, m0: { value: 80 }, m0_missing: { doc_count: 0 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
+        { key: 'store', doc_count: 1, m0: { value: 40 }, m0_missing: { doc_count: 0 }, m1: { value: 1 }, m1_missing: { doc_count: 0 } },
       ] }, d0_missing: { doc_count: 0 } },
     }))))
     const { model, plan } = resolved({ metrics: ['sales_amount', 'atv'], dimensions: ['channel'],
@@ -445,7 +447,10 @@ describe('CRM semantic analysis executor', () => {
       value: null, unavailableReason: '1 matching documents have missing sales_amount values',
     })
     expect(result.rows[0]?.metrics.atv).toMatchObject({ value: null, unavailableReason: 'sales_amount is unavailable' })
-    expect(result.completeness).toMatchObject({ complete: false, missingMetricDocuments: 1 })
+    expect(result.rows[1]?.metrics.sales_amount).toMatchObject({
+      value: null, unavailableReason: '1 matching documents have missing sales_amount values',
+    })
+    expect(result.completeness).toMatchObject({ complete: false, missingMetricDocuments: 2 })
     expect(result.coverage.current.observedStart).toBe('2024-01-02')
   })
 
