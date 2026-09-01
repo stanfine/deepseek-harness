@@ -165,11 +165,6 @@ function sourceAggregations(source: ConfiguredAggregationSource, plan: ResolvedA
   return aggs
 }
 
-function shiftDate(value: string, from: string, to: string): string {
-  const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000
-  return dateText(new Date(Date.parse(`${value}T00:00:00Z`) + days * 86400000))
-}
-
 function filterEnd(value: string, grain: NonNullable<ResolvedAnalysisPlan['timeGrain']>): string {
   return dateText(nextCalendarBucket(new Date(`${value}T00:00:00Z`), grain))
 }
@@ -191,11 +186,11 @@ function queryFilters(
   for (const filter of plan.filters.filter(candidate => Boolean(candidate.relativeToWindow) === relative)) {
     const field = source.dimensionField(filter.dimension.field)
     if (filter.dimension.dataType === 'date') {
-      const grain = plan.dimensions.some(dimension => dimension.id === filter.dimension.id) ? plan.timeGrain ?? 'day' : 'day'
+      const grain = filter.relativeToWindow ? plan.timeGrain ?? 'day' : 'day'
       const ranges = filter.values.map((sourceValue) => {
-        const value = filter.relativeToWindow && plan.dimensions.some(dimension => dimension.id === filter.dimension.id)
+        const value = filter.relativeToWindow
           ? relativeBucketValue(sourceValue, plan, window)
-          : shiftDate(sourceValue, plan.start, window.start)
+          : sourceValue
         return { range: { [field]: {
           gte: `${value}T00:00:00${source.timeZone}`,
           lt: `${filterEnd(value, grain)}T00:00:00${source.timeZone}`,

@@ -254,6 +254,21 @@ function isDrilldownRequest(request: AnalysisRequest | DrilldownRequest): reques
   return 'drilldownDimension' in request || 'parentFilters' in request
 }
 
+function calendarBucketStart(value: string, grain: TimeGrain): string {
+  const date = new Date(`${value}T00:00:00Z`)
+  if (grain === 'week') date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7)
+  else if (grain === 'month') date.setUTCDate(1)
+  return date.toISOString().slice(0, 10)
+}
+
+function calendarBucketOverlaps(value: string, grain: TimeGrain, start: string, end: string): boolean {
+  const next = new Date(`${value}T00:00:00Z`)
+  if (grain === 'day') next.setUTCDate(next.getUTCDate() + 1)
+  else if (grain === 'week') next.setUTCDate(next.getUTCDate() + 7)
+  else next.setUTCMonth(next.getUTCMonth() + 1)
+  return value < end && next.toISOString().slice(0, 10) > start
+}
+
 /** Resolve a closed analysis or drilldown request before the executor accesses a source.
  * @param model Validated semantic catalog.
  * @param request Model-facing aggregate request.
@@ -300,6 +315,13 @@ export function resolveAnalysisPlan(
   if (!Number.isSafeInteger(limit) || limit <= 0 || limit > model.limits.maxTopN) throw new Error('Invalid analysis limit')
   const timeGrain = resolveTimeGrain(model, dimensions, request.timeGrain, request.intent)
   if (dateDimensions.length > 0 && timeGrain === undefined) throw new Error('Date dimension requires a time grain')
+  for (const filter of filters) {
+    if (filter.relativeToWindow && filter.dimension.dataType === 'date'
+      && (timeGrain === undefined || filter.values.some(value => calendarBucketStart(value, timeGrain) !== value
+        || !calendarBucketOverlaps(value, timeGrain, range.start, range.end)))) {
+      throw new Error('Date drilldown parent must be a selected grain bucket start')
+    }
+  }
   if (timeGrain !== undefined && calendarBucketCount(range, timeGrain) > budgets.maxBuckets) {
     throw new Error(request.intent === 'trend' ? 'Trend exceeds bucket budget' : 'Calendar grouping exceeds bucket budget')
   }

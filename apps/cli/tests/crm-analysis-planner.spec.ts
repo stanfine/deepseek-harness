@@ -141,6 +141,14 @@ describe('CRM semantic analysis planner', () => {
     expect(() => resolveAnalysisPlan(model(), request, budgets)).toThrow(/Drilldown requires at least one parent filter/)
   })
 
+  it('rejects a date drilldown parent that is not the selected grain bucket start', () => {
+    const request: DrilldownRequest = {
+      metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'month', start: '2025-05-15', end: '2025-07-10',
+      intent: 'comparison', drilldownDimension: 'province', parentFilters: [{ dimension: 'day', values: ['2025-05-15'] }],
+    }
+    expect(() => resolveAnalysisPlan(model(), request, budgets)).toThrow(/bucket start/i)
+  })
+
   it.each([
     ['day', '2025-05-01', '2025-06-01', 31, false],
     ['day', '2025-05-01', '2025-06-02', 31, true],

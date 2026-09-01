@@ -239,7 +239,7 @@ export function apply(ctx: Context, config: CrmConfig): void {
     const plan = resolveAnalysisPlan(semanticModel, request,
       { maxRangeDays: config.maxRangeDays, maxBuckets: config.maxBuckets })
     const result = await executeSemanticAnalysis(reader, semanticModel, plan, signal)
-    assertSemanticToolProjectionSize(result)
+    assertSemanticToolProjectionSize(result, Math.min(config.maxResponseBytes, CRM_ANALYSIS_MAX_BYTES))
     return json(result)
   }
   ctx.effect(() => ctx.tools.register(defineTool({

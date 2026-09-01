@@ -482,13 +482,41 @@ describe('CRM semantic analysis executor', () => {
       response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
         current: { doc_count: 0, m0: { value: 0 }, m0_missing: { doc_count: 0 } } }, 0)))
     })
-    const { model, plan } = resolved({ metrics: ['sales_amount'], start: '2025-05-01', end: '2025-06-01', intent: 'summary',
+    const { model, plan } = resolved({ metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'week',
+      start: '2025-05-01', end: '2025-06-01', intent: 'comparison',
       filters: [{ dimension: 'day', operator: 'in', values: ['2025-05-01', '2025-05-03'] }] })
-    await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+    await expect(executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal))
+      .rejects.toThrow(/aggregation response/)
     expect(body).toMatchObject({ query: { bool: { filter: [expect.anything(), { bool: { minimum_should_match: 1, should: [
       { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-05-02T00:00:00+08:00' } } },
       { range: { private_order_date: { gte: '2025-05-03T00:00:00+08:00', lt: '2025-05-04T00:00:00+08:00' } } },
     ] } }] } } })
+  })
+
+  it('keeps an ordinary selected-date filter at day grain for comparison distinct queries', async () => {
+    const bodies: Record<string, unknown>[] = []
+    const endpoint = await fixture(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += String(chunk)
+      const body = JSON.parse(text) as { aggs?: Record<string, unknown> }
+      bodies.push(body)
+      if (body.aggs?.distinct) {
+        response.end(JSON.stringify(elastic({ distinct: { buckets: [] } }, 0)))
+        return
+      }
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 0, d0: { buckets: [{ key_as_string: '2025-05-01', doc_count: 0 }] }, d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 0, d0: { buckets: [
+          { key_as_string: '2025-03-01', doc_count: 0 }, { key_as_string: '2025-04-01', doc_count: 0 },
+        ] }, d0_missing: { doc_count: 0 } } }, 0)))
+    })
+    const { model, plan } = resolved({ metrics: ['purchaser_count'], dimensions: ['day'], timeGrain: 'month',
+      filters: [{ dimension: 'day', operator: 'equals', value: '2025-05-15' }], start: '2025-05-01', end: '2025-06-01',
+      comparison: 'previous_period', intent: 'comparison' })
+    await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+    const serialized = bodies.map(body => JSON.stringify(body)).join('\n')
+    expect(serialized).toContain('2025-05-15T00:00:00+08:00')
+    expect(serialized).toContain('2025-05-16T00:00:00+08:00')
+    expect(serialized).not.toContain('2025-04-15T00:00:00+08:00')
   })
 
   it('compiles month drilldown parents for current and shifted comparison windows', async () => {

@@ -69,6 +69,36 @@ function objectKeys(value: unknown): string[] {
 }
 
 describe('CRM Elasticsearch reader', () => {
+  it('enforces the configured final semantic projection budget only on analysis tools', async () => {
+    const endpoint = await fixture((_req, res) => res.end(JSON.stringify(response({
+      source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+      current: { doc_count: 3, m0: { value: 120 }, m0_missing: { doc_count: 0 } },
+    }))))
+    const ctx = new Context()
+    ctx.provide('connection', { fetch: { register: () => () => {} } } as never)
+    const previousUser = process.env.TEST_USER, previousPassword = process.env.TEST_PASSWORD
+    Object.assign(process.env, env)
+    try {
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolRuntime)
+      const bounded = { ...config, endpoint, maxResponseBytes: 2500, semantic: { ...config.semantic,
+        metrics: config.semantic.metrics.map((metric, index) => index === 0
+          ? { ...metric, description: 'x'.repeat(385) } : metric) } }
+      await ctx.plugin(CrmTools, bounded)
+      const catalog = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('bounded-catalog'),
+        name: 'crm_metric_catalog', arguments: {} })
+      expect(catalog.isError).toBe(false)
+      const analysis = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('bounded-analysis'),
+        name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01', intent: 'summary' } })
+      expect(analysis.isError).toBe(true)
+      expect(JSON.stringify(analysis)).toMatch(/tool projection byte limit exceeded/)
+    } finally {
+      if (previousUser === undefined) delete process.env.TEST_USER; else process.env.TEST_USER = previousUser
+      if (previousPassword === undefined) delete process.env.TEST_PASSWORD; else process.env.TEST_PASSWORD = previousPassword
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects unknown semantic metric kinds during plugin configuration', async () => {
     const ctx = new Context()
     ctx.provide('connection', { fetch: { register: () => () => {} } } as never)
@@ -104,9 +134,9 @@ describe('CRM Elasticsearch reader', () => {
           current: grouped
             ? { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
               buckets: [{ key: '浙江', doc_count: 3, ...(nested ? { d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
-                buckets: [{ key: '门店', doc_count: 3, m0: { value: 120 } }] }, d1_missing: { doc_count: 0 } }
-                : { m0: { value: 120 } }) }] }, d0_missing: { doc_count: 0 } }
-            : { doc_count: 3, m0: { value: 120 } },
+                buckets: [{ key: '门店', doc_count: 3, m0: { value: 120 }, m0_missing: { doc_count: 0 } }] }, d1_missing: { doc_count: 0 } }
+                : { m0: { value: 120 }, m0_missing: { doc_count: 0 } }) }] }, d0_missing: { doc_count: 0 } }
+            : { doc_count: 3, m0: { value: 120 }, m0_missing: { doc_count: 0 } },
         })))
       } else res.end(JSON.stringify(response({ amount: { count: 3, sum: 120, avg: 40, min: 10, max: 70 } })))
     })

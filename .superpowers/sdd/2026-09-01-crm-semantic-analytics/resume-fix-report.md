@@ -25,3 +25,9 @@ This resumed audit addressed the six Important findings from the final branch re
 ## Residual limits
 
 The count represented by `missingMetricValues` is intentionally additive across metric and group occurrences. It is suitable for completeness disclosure, not unique-document reporting. Comparison date drilldowns map by relative calendar bucket position; this preserves partial week/month histogram semantics but does not claim civil-date identity between periods.
+
+## Follow-up review fixes
+
+A follow-up review found two remaining contract mismatches. Ordinary date filters now always compile as configured-time-zone local-day ranges, even when the same dimension is grouped by week or month; only planner-originated drilldown parents carry window-relative behavior. Date parents must be aligned bucket starts that overlap the current window before source access. Current and comparison source and distinct queries retain the same ordinary filter date.
+
+The tool owner now applies the lower of `maxResponseBytes` and 1 MiB to the actual retained projection. An actual ToolRuntime test uses a 2,500-byte deployment limit with an internal result below the limit and a retained projection above it, proves `crm_analyze` rejects it, and proves catalog tools remain available.
