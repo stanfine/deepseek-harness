@@ -25,6 +25,219 @@
     maxBuckets: 31
     distinctPageSize: 1000
     maxDistinctPages: 50
+    semantic:
+      maxSelectedMetrics: 5
+      maxDimensions: 2
+      maxFilters: 10
+      maxTopN: 20
+      timeGrains: [day, week, month]
+      metrics:
+        - id: sales_amount
+          name: 销售额
+          dataset: order_facts
+          kind: sum
+          field: amount
+          format: currency
+          description: 订单事实表中配置销售金额字段的合计。
+          limitations: [退款、取消、币种和订单去重口径需由数据所有者确认。]
+        - id: order_count
+          name: 订单数
+          dataset: order_facts
+          kind: sum
+          field: orderCount
+          format: number
+          description: 订单事实表中配置订单数度量的合计。
+          limitations: [订单事实表的去重和过滤口径需由数据所有者确认。]
+        - id: quantity
+          name: 件数
+          dataset: order_facts
+          kind: sum
+          field: quantity
+          format: number
+          description: 订单事实表中配置商品件数度量的合计。
+          limitations: [件数口径和退货处理需由数据所有者确认。]
+        - id: purchaser_count
+          name: 购买人数
+          dataset: order_facts
+          kind: distinct_count
+          field: customer
+          format: number
+          description: 订单事实表中配置购买者标识的去重计数。
+          limitations: [缺失购买者标识的记录不计入人数。]
+        - id: atv
+          name: 客单价
+          dataset: order_facts
+          kind: ratio
+          dependencies: [sales_amount, order_count]
+          format: currency
+          description: 销售额除以订单数。
+          limitations: [订单数为零时无法计算。]
+        - id: items_per_order
+          name: 连带率
+          dataset: order_facts
+          kind: ratio
+          dependencies: [quantity, order_count]
+          format: decimal
+          description: 件数除以订单数。
+          limitations: [订单数为零时无法计算。]
+        - id: amount_per_item
+          name: 件单价
+          dataset: order_facts
+          kind: ratio
+          dependencies: [sales_amount, quantity]
+          format: currency
+          description: 销售额除以件数。
+          limitations: [件数为零时无法计算。]
+        - id: frequency
+          name: 购买频次
+          dataset: order_facts
+          kind: ratio
+          dependencies: [order_count, purchaser_count]
+          format: decimal
+          description: 订单数除以购买人数。
+          limitations: [购买人数为零时无法计算。]
+        - id: amount_per_purchaser
+          name: 人均消费
+          dataset: order_facts
+          kind: ratio
+          dependencies: [sales_amount, purchaser_count]
+          format: currency
+          description: 销售额除以购买人数。
+          limitations: [购买人数为零时无法计算。]
+        - id: repeat_purchase
+          name: 复购
+          dataset: order_facts
+          kind: unavailable
+          format: number
+          description: 复购指标。
+          limitations: [当前配置未声明复购业务定义和完整历史数据。]
+        - id: lifecycle
+          name: 生命周期
+          dataset: order_facts
+          kind: unavailable
+          format: number
+          description: 生命周期指标。
+          limitations: [当前配置未声明生命周期分群定义和完整历史数据。]
+        - id: traffic_conversion
+          name: 流量转化
+          dataset: order_facts
+          kind: unavailable
+          format: decimal
+          description: 流量转化指标。
+          limitations: [当前配置没有访问流量数据源和归因定义。]
+        - id: campaign_attribution
+          name: 活动归因
+          dataset: order_facts
+          kind: unavailable
+          format: decimal
+          description: 活动归因指标。
+          limitations: [当前配置没有活动归因规则和来源数据。]
+        - id: target_completion
+          name: 目标达成
+          dataset: order_facts
+          kind: unavailable
+          format: decimal
+          description: 目标达成指标。
+          limitations: [当前配置没有目标值数据源和业务口径。]
+        - id: cost
+          name: 成本
+          dataset: order_facts
+          kind: unavailable
+          format: currency
+          description: 成本指标。
+          limitations: [当前配置没有成本数据源和分摊口径。]
+      dimensions:
+        - id: day
+          name: 日期
+          dataset: order_facts
+          field: time
+          dataType: date
+          filters: [equals, in]
+          timeGrains: [day, week, month]
+          description: 订单日期。
+          limitations: [日期覆盖范围不证明历史完整。]
+        - id: week
+          name: 周
+          dataset: order_facts
+          field: time
+          dataType: date
+          filters: [equals, in]
+          timeGrains: [week]
+          description: 订单日期按自然周分组。
+          limitations: [日期覆盖范围不证明历史完整。]
+        - id: month
+          name: 月
+          dataset: order_facts
+          field: time
+          dataType: date
+          filters: [equals, in]
+          timeGrains: [month]
+          description: 订单日期按自然月分组。
+          limitations: [日期覆盖范围不证明历史完整。]
+        - id: province
+          name: 省份
+          dataset: order_facts
+          field: province
+          dataType: keyword
+          filters: [equals, in]
+          description: 订单事实表中配置的省份。
+          limitations: []
+        - id: channel
+          name: 渠道
+          dataset: orders
+          field: channel
+          dataType: keyword
+          filters: [equals, in]
+          description: 原始订单文档中配置的渠道。
+          limitations: [原始订单文档不等同于去重订单。]
+        - id: subchannel
+          name: 子渠道
+          dataset: orders
+          field: subchannel
+          dataType: keyword
+          filters: [equals, in]
+          description: 原始订单文档中配置的子渠道。
+          limitations: [原始订单文档不等同于去重订单。]
+        - id: store
+          name: 门店
+          dataset: orders
+          field: store
+          dataType: keyword
+          filters: [equals, in]
+          description: 原始订单文档中配置的门店。
+          limitations: [原始订单文档不等同于去重订单。]
+        - id: store_type
+          name: 门店类型
+          dataset: orders
+          field: storeType
+          dataType: keyword
+          filters: [equals, in]
+          description: 原始订单文档中配置的门店类型。
+          limitations: [原始订单文档不等同于去重订单。]
+        - id: order_type
+          name: 订单类型
+          dataset: orders
+          field: orderType
+          dataType: keyword
+          filters: [equals, in]
+          description: 原始订单文档中配置的订单类型。
+          limitations: [原始订单文档不等同于去重订单。]
+        - id: series
+          name: 系列
+          dataset: order_items
+          field: series
+          dataType: keyword
+          filters: [equals, in]
+          description: 商品行宽表中配置的产品系列。
+          limitations: [商品行文档不等同于订单。]
+        - id: sku
+          name: SKU
+          dataset: order_items
+          field: sku
+          dataType: keyword
+          filters: [equals, in]
+          description: 商品行宽表中配置的 SKU。
+          limitations: [商品行文档不等同于订单。]
     report:
       fiscalYearStartMonth: 4
       orderFactsDataset: order_facts

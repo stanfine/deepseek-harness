@@ -25,6 +25,16 @@ const config = {
   } },
   report: { fiscalYearStartMonth: 4, orderFactsDataset: 'order_facts', orderItemsDataset: 'order_items', weeklyMultipleOrdersAreRepeatPurchasers: false },
   excel: { maxRecommendations: 2, maxRecommendationChars: 100, downloadBaseUrl: 'http://127.0.0.1:3080' },
+  semantic: {
+    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 10, timeGrains: ['day', 'week', 'month'],
+    metrics: [
+      { id: 'sales_amount', name: '销售额', dataset: 'order_facts', kind: 'sum', field: 'amount', format: 'currency',
+        description: 'Configured order amount.', limitations: ['Source accounting semantics are unverified.'] },
+      { id: 'order_count', name: '订单数', dataset: 'order_facts', kind: 'sum', field: 'orderCount', format: 'number',
+        description: 'Configured order count.', limitations: ['Source order definition is unverified.'] },
+    ],
+    dimensions: [],
+  },
 }
 const env = { TEST_USER: 'fixture-user', TEST_PASSWORD: 'fixture-password' }
 const response = (aggregations: object = {}, hits: object[] = []) => ({ timed_out: false, _shards: { failed: 0 },
