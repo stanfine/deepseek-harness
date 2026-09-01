@@ -21,7 +21,8 @@ const datasets: Record<string, Dataset> = {
 
 function model(change?: (config: SemanticConfig) => void) {
   const config: SemanticConfig = {
-    maxSelectedMetrics: 3, maxDimensions: 2, maxFilters: 3, maxTopN: 10, timeGrains: ['day', 'week', 'month'],
+    maxSelectedMetrics: 3, maxDimensions: 2, maxFilters: 3, maxTopN: 10,
+    maxFilterValues: 20, maxInputChars: 128, maxRequestBytes: 8192, timeGrains: ['day', 'week', 'month'],
     metrics: [
       { id: 'sales_amount', name: '销售额', dataset: 'facts', kind: 'sum', field: 'amount', format: 'currency', description: 'Sales.', limitations: [] },
       { id: 'order_count', name: '订单数', dataset: 'facts', kind: 'sum', field: 'orderCount', format: 'number', description: 'Orders.', limitations: [] },

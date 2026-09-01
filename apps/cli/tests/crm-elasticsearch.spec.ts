@@ -27,7 +27,8 @@ const config = {
   report: { fiscalYearStartMonth: 4, orderFactsDataset: 'order_facts', orderItemsDataset: 'order_items', weeklyMultipleOrdersAreRepeatPurchasers: false },
   excel: { maxRecommendations: 2, maxRecommendationChars: 100, downloadBaseUrl: 'http://127.0.0.1:3080' },
   semantic: {
-    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 10, timeGrains: ['day', 'week', 'month'],
+    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 10,
+    maxFilterValues: 20, maxInputChars: 128, maxRequestBytes: 8192, timeGrains: ['day', 'week', 'month'],
     metrics: [
       { id: 'sales_amount', name: '销售额', dataset: 'order_facts', kind: 'sum', field: 'amount', format: 'currency',
         description: 'Configured order amount.', limitations: ['Source accounting semantics are unverified.'] },
@@ -146,13 +147,35 @@ describe('CRM Elasticsearch reader', () => {
           intent: 'ranking', limit: 5 } })
       expect(drilldown.isError).toBe(false)
       expect(drilldown.meta).toMatchObject({ crmAnalysis: { version: 1,
-        request: { drilldownDimension: 'channel', parentFilters: [{ dimension: 'province', values: ['浙江'] }] },
+        request: { dimensions: ['province', 'channel'], filters: [{ dimension: 'province', operator: 'in', values: ['浙江'] }] },
         data: { version: 1, rows: [{ dimensions: { province: '浙江', channel: '门店' } }] } } })
       const beforeRejected = requestCount
-      const rejected = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-cross-dataset'),
-        name: 'crm_analyze', arguments: { metrics: ['sales_amount', 'item_quantity'], start: '2025-01-01',
-          end: '2025-02-01', intent: 'summary' } })
-      expect(rejected.isError).toBe(true)
+      const rejectedRequests = [
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount', 'item_quantity'], start: '2025-01-01',
+          end: '2025-02-01', intent: 'summary' } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01',
+          intent: 'summary', path: '/private' } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], dimensions: ['province'], start: '2025-01-01',
+          end: '2025-02-01', intent: 'ranking', drilldownDimension: 'channel',
+          parentFilters: [{ dimension: 'province', values: ['浙江'] }] } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01',
+          intent: 'summary', filters: [{ dimension: 'province', operator: 'equals', value: '浙江', script: 'x' }] } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01',
+          intent: 'summary', filters: [{ dimension: 'province', operator: 'equals', value: 'x'.repeat(129) }] } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01',
+          intent: 'summary', filters: [{ dimension: 'province', operator: 'in', values: Array.from({ length: 21 }, (_, index) => `v${index}`) }] } },
+        { name: 'crm_drilldown', arguments: { metrics: ['sales_amount'], dimensions: ['province'], drilldownDimension: 'channel',
+          parentFilters: [{ dimension: 'province', values: Array.from({ length: 21 }, (_, index) => `v${index}`) }],
+          start: '2025-01-01', end: '2025-02-01', intent: 'ranking' } },
+        { name: 'crm_analyze', arguments: { metrics: ['sales_amount'], start: '2025-01-01', end: '2025-02-01', intent: 'summary',
+          filters: Array.from({ length: 4 }, () => ({ dimension: 'province', operator: 'in',
+            values: Array.from({ length: 20 }, (_, index) => `${index}-${'x'.repeat(100)}`) })) } },
+      ] as const
+      for (const [index, request] of rejectedRequests.entries()) {
+        const rejected = await ctx.tools.execute({ signal: new AbortController().signal,
+          callId: ToolCallId(`crm-rejected-${index}`), ...request })
+        expect(rejected.isError).toBe(true)
+      }
       expect(requestCount).toBe(beforeRejected)
       const periods = await ctx.tools.execute({ signal: new AbortController().signal, callId: ToolCallId('crm-weekly-periods'),
         name: 'crm_report_periods', arguments: { date: '2025-05-07' } })

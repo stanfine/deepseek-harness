@@ -31,7 +31,8 @@ export const Config = z.object({
   })).required(),
   semantic: z.object({
     maxSelectedMetrics: z.number().required(), maxDimensions: z.number().required(), maxFilters: z.number().required(),
-    maxTopN: z.number().required(), timeGrains: z.array(z.string()).required(),
+    maxTopN: z.number().required(), maxFilterValues: z.number().required(), maxInputChars: z.number().required(),
+    maxRequestBytes: z.number().required(), timeGrains: z.array(z.string()).required(),
     metrics: z.array(z.object({
       id: z.string().required(), name: z.string().required(), dataset: z.string().required(), kind: z.string().required(),
       format: z.string().required(), description: z.string().required(), limitations: z.array(z.string()).required(),
@@ -172,31 +173,40 @@ export function apply(ctx: Context, config: CrmConfig): void {
   })))
   const semanticOutput = {
     ...output,
-    presentationMeta(args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
-      return { crmAnalysis: { version: 1, request: json(args), data: value } }
+    presentationMeta(_args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
+      const request = (value as { request: import('@deepseek-ai/dsh-session').JsonValue }).request
+      return { crmAnalysis: { version: 1, request, data: value } }
     },
   }
   const analysisParameters: ParameterSchemaSpec = {
-    metrics: { type: 'array' as const, required: true as const, items: { type: 'string' as const } },
-    dimensions: { type: 'array' as const, items: { type: 'string' as const } },
+    metrics: { type: 'array' as const, required: true as const,
+      items: { type: 'string' as const, description: `Catalog id, at most ${config.semantic.maxInputChars} characters.` },
+      description: `One to ${config.semantic.maxSelectedMetrics} catalog metric ids.` },
+    dimensions: { type: 'array' as const,
+      items: { type: 'string' as const, description: `Catalog id, at most ${config.semantic.maxInputChars} characters.` },
+      description: `At most ${config.semantic.maxDimensions} catalog dimension ids.` },
     start: { type: 'string' as const, required: true as const, description: 'Inclusive YYYY-MM-DD business date.' },
     end: { type: 'string' as const, required: true as const, description: 'Exclusive YYYY-MM-DD business date.' },
     intent: { type: 'string' as const, required: true as const,
       enum: ['summary', 'trend', 'ranking', 'composition', 'comparison'] },
-    filters: { type: 'array' as const, items: { type: 'object' as const, additionalProperties: false, properties: {
-      dimension: { type: 'string' as const, required: true },
-      operator: { type: 'string' as const, enum: ['equals', 'in'], required: true },
-      value: { type: 'string' as const }, values: { type: 'array' as const, items: { type: 'string' as const } },
-    } } },
+    filters: { type: 'array' as const, description: `At most ${config.semantic.maxFilters} closed filters; text is limited to ${config.semantic.maxInputChars} characters.`,
+      items: { type: 'object' as const, additionalProperties: false, properties: {
+        dimension: { type: 'string' as const, required: true,
+          description: `Catalog id, at most ${config.semantic.maxInputChars} characters.` },
+        operator: { type: 'string' as const, enum: ['equals', 'in'], required: true },
+        value: { type: 'string' as const }, values: { type: 'array' as const, items: { type: 'string' as const },
+          description: `At most ${config.semantic.maxFilterValues} values.` },
+      } } },
     comparison: { type: 'string' as const, enum: ['none', 'previous_period', 'prior_year'] },
     timeGrain: { type: 'string' as const, enum: ['day', 'week', 'month'] },
     sort: { type: 'object' as const, additionalProperties: false, properties: {
       metric: { type: 'string' as const, required: true },
       direction: { type: 'string' as const, enum: ['asc', 'desc'], required: true },
     } },
-    limit: { type: 'number' as const },
+    limit: { type: 'integer' as const, description: `Positive integer no greater than ${config.semantic.maxTopN}.` },
   }
-  const executeAnalysis = async (request: AnalysisRequest | DrilldownRequest, signal: AbortSignal) => {
+  const executeAnalysis = async (request: AnalysisRequest | DrilldownRequest, signal: AbortSignal, drilldown: boolean) => {
+    if (!drilldown && ('drilldownDimension' in request || 'parentFilters' in request)) throw new Error('Unknown analysis argument')
     const plan = resolveAnalysisPlan(semanticModel, request,
       { maxRangeDays: config.maxRangeDays, maxBuckets: config.maxBuckets })
     return json(await executeSemanticAnalysis(reader, semanticModel, plan, signal))
@@ -214,19 +224,22 @@ export function apply(ctx: Context, config: CrmConfig): void {
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_analyze', description: 'Calculate bounded CRM aggregates from configured business metrics and dimensions.',
     parameters: analysisParameters, output: semanticOutput,
-    async execute(args, exec) { return executeAnalysis(args as unknown as AnalysisRequest, exec.signal) },
+    async execute(args, exec) { return executeAnalysis(args as unknown as AnalysisRequest, exec.signal, false) },
   })))
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_drilldown', description: 'Continue a CRM aggregate by adding one configured dimension to selected parent values.',
     parameters: { ...analysisParameters,
-      drilldownDimension: { type: 'string' as const, required: true },
+      drilldownDimension: { type: 'string' as const, required: true,
+        description: `Catalog id, at most ${config.semantic.maxInputChars} characters.` },
       parentFilters: { type: 'array' as const, required: true, items: { type: 'object' as const,
         additionalProperties: false, properties: {
-          dimension: { type: 'string' as const, required: true },
-          values: { type: 'array' as const, required: true, items: { type: 'string' as const } },
+          dimension: { type: 'string' as const, required: true,
+            description: `Catalog id, at most ${config.semantic.maxInputChars} characters.` },
+          values: { type: 'array' as const, required: true, items: { type: 'string' as const },
+            description: `At most ${config.semantic.maxFilterValues} selected parent values.` },
         } } },
     }, output: semanticOutput,
-    async execute(args, exec) { return executeAnalysis(args as unknown as DrilldownRequest, exec.signal) },
+    async execute(args, exec) { return executeAnalysis(args as unknown as DrilldownRequest, exec.signal, true) },
   })))
   const reportOutput = (kind: string) => ({
     ...output,

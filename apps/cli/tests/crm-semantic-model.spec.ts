@@ -21,7 +21,8 @@ const datasets: Record<string, Dataset> = {
 
 function semanticConfig(): SemanticConfig {
   return {
-    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 20, timeGrains: ['day', 'week', 'month'],
+    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 20,
+    maxFilterValues: 20, maxInputChars: 128, maxRequestBytes: 8192, timeGrains: ['day', 'week', 'month'],
     metrics: [
       { id: 'sales_amount', name: '销售额', dataset: 'facts', kind: 'sum', field: 'amount', format: 'currency',
         description: 'Configured order amount total.', limitations: ['Refund and currency treatment require source-owner confirmation.'] },
@@ -67,8 +68,10 @@ function ratioMetric(config: SemanticConfig, id: string): Extract<MetricDefiniti
   return definition
 }
 
-const limitCases: readonly [keyof Pick<SemanticConfig, 'maxSelectedMetrics' | 'maxDimensions' | 'maxFilters' | 'maxTopN'>, number][] = [
+const limitCases: readonly [keyof Pick<SemanticConfig, 'maxSelectedMetrics' | 'maxDimensions' | 'maxFilters' | 'maxTopN'
+  | 'maxFilterValues' | 'maxInputChars' | 'maxRequestBytes'>, number][] = [
   ['maxSelectedMetrics', 0], ['maxSelectedMetrics', 6], ['maxDimensions', -1], ['maxDimensions', 3], ['maxFilters', 1.5], ['maxTopN', 0],
+  ['maxFilterValues', 51], ['maxInputChars', 257], ['maxRequestBytes', 32769],
 ]
 
 describe('CRM semantic model', () => {
@@ -78,7 +81,8 @@ describe('CRM semantic model', () => {
     const dimensions = model.dimensionCatalog() as { dimensions: unknown[] }
 
     expect(metrics).toMatchObject({
-      limits: { maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 20, timeGrains: ['day', 'week', 'month'] },
+      limits: { maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 20,
+        maxFilterValues: 20, maxInputChars: 128, maxRequestBytes: 8192, timeGrains: ['day', 'week', 'month'] },
     })
     expect(metrics.metrics).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'sales_amount', name: '销售额', dataset: 'facts', format: 'currency' }),

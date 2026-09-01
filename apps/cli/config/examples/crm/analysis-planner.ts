@@ -89,6 +89,54 @@ export interface ResolvedAnalysisPlan {
 const intents = new Set<AnalysisIntent>(['summary', 'trend', 'ranking', 'composition', 'comparison'])
 const comparisons = new Set<Comparison>(['none', 'previous_period', 'prior_year'])
 const timeGrains = new Set<TimeGrain>(['day', 'week', 'month'])
+const requestKeys = new Set(['metrics', 'dimensions', 'start', 'end', 'intent', 'filters', 'comparison', 'timeGrain', 'sort', 'limit',
+  'drilldownDimension', 'parentFilters'])
+const filterKeys = new Set(['dimension', 'operator', 'value', 'values'])
+const parentFilterKeys = new Set(['dimension', 'values'])
+const sortKeys = new Set(['metric', 'direction'])
+
+function plainObject(value: unknown, message: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message)
+  return value as Record<string, unknown>
+}
+
+function closedKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>, message: string): void {
+  if (Object.keys(value).some(key => !allowed.has(key))) throw new Error(message)
+}
+
+function boundedStrings(value: unknown, maxChars: number): void {
+  if (typeof value === 'string') {
+    if (value.length === 0 || value.length > maxChars) throw new Error('Analysis text exceeds limit')
+    return
+  }
+  if (Array.isArray(value)) { for (const item of value) boundedStrings(item, maxChars); return }
+  if (value && typeof value === 'object') for (const item of Object.values(value)) boundedStrings(item, maxChars)
+}
+
+function validateRequestEnvelope(model: ResolvedSemanticModel, request: unknown): asserts request is AnalysisRequest | DrilldownRequest {
+  const input = plainObject(request, 'Invalid analysis request')
+  closedKeys(input, requestKeys, 'Unknown analysis argument')
+  const serialized = JSON.stringify(input)
+  if (new TextEncoder().encode(serialized).byteLength > model.limits.maxRequestBytes) throw new Error('Analysis request exceeds byte limit')
+  boundedStrings(input, model.limits.maxInputChars)
+  if (input.filters !== undefined) {
+    if (!Array.isArray(input.filters)) throw new Error('Invalid filters')
+    for (const item of input.filters) {
+      const filter = plainObject(item, 'Invalid filter')
+      closedKeys(filter, filterKeys, 'Unknown filter argument')
+      if (Array.isArray(filter.values) && filter.values.length > model.limits.maxFilterValues) throw new Error('Too many inclusion values')
+    }
+  }
+  if (input.parentFilters !== undefined) {
+    if (!Array.isArray(input.parentFilters)) throw new Error('Invalid drilldown parent filters')
+    for (const item of input.parentFilters) {
+      const filter = plainObject(item, 'Invalid drilldown parent filter')
+      closedKeys(filter, parentFilterKeys, 'Unknown drilldown parent argument')
+      if (Array.isArray(filter.values) && filter.values.length > model.limits.maxFilterValues) throw new Error('Too many parent values')
+    }
+  }
+  if (input.sort !== undefined) closedKeys(plainObject(input.sort, 'Invalid sort'), sortKeys, 'Unknown sort argument')
+}
 
 function unique(values: readonly string[]): string[] {
   const result: string[] = []
@@ -210,7 +258,7 @@ function isDrilldownRequest(request: AnalysisRequest | DrilldownRequest): reques
 export function resolveAnalysisPlan(
   model: ResolvedSemanticModel, request: AnalysisRequest | DrilldownRequest, budgets: AnalysisBudgets,
 ): ResolvedAnalysisPlan {
-  if (!request || typeof request !== 'object') throw new Error('Invalid analysis request')
+  validateRequestEnvelope(model, request)
   if (!Number.isSafeInteger(budgets.maxBuckets) || budgets.maxBuckets <= 0) throw new Error('Invalid bucket budget')
   if (!intents.has(request.intent)) throw new Error('Unknown analysis intent')
   const metrics = resolveMetrics(model, request.metrics)

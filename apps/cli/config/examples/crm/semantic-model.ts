@@ -67,6 +67,9 @@ export interface SemanticConfig {
   maxDimensions: number
   maxFilters: number
   maxTopN: number
+  maxFilterValues: number
+  maxInputChars: number
+  maxRequestBytes: number
   timeGrains: TimeGrain[]
 }
 
@@ -235,11 +238,14 @@ function catalogDimension(definition: DimensionDefinition): JsonValue {
  * @throws {Error} When definitions, dependencies, logical mappings, or limits are invalid.
  */
 export function resolveSemanticModel(config: SemanticConfig, datasets: Record<string, Dataset>): ResolvedSemanticModel {
-  for (const key of ['maxSelectedMetrics', 'maxDimensions', 'maxFilters', 'maxTopN'] as const) {
+  for (const key of ['maxSelectedMetrics', 'maxDimensions', 'maxFilters', 'maxTopN', 'maxFilterValues', 'maxInputChars', 'maxRequestBytes'] as const) {
     if (!Number.isSafeInteger(config[key]) || config[key] <= 0) throw new Error(`Invalid ${key}`)
   }
   if (config.maxSelectedMetrics > 5) throw new Error('Invalid maxSelectedMetrics')
   if (config.maxDimensions > 2) throw new Error('Invalid maxDimensions')
+  if (config.maxFilterValues > 50) throw new Error('Invalid maxFilterValues')
+  if (config.maxInputChars > 256) throw new Error('Invalid maxInputChars')
+  if (config.maxRequestBytes > 32768) throw new Error('Invalid maxRequestBytes')
   if (!Array.isArray(config.timeGrains) || config.timeGrains.length === 0 || config.timeGrains.some(grain => !timeGrains.has(grain))
     || new Set(config.timeGrains).size !== config.timeGrains.length) throw new Error('Invalid semantic time grains')
   const metrics = new Map<string, MetricDefinition>()
@@ -257,11 +263,13 @@ export function resolveSemanticModel(config: SemanticConfig, datasets: Record<st
   }
   validateDependencies(metrics)
   const limits = Object.freeze({ maxSelectedMetrics: config.maxSelectedMetrics, maxDimensions: config.maxDimensions,
-    maxFilters: config.maxFilters, maxTopN: config.maxTopN, timeGrains: Object.freeze([...config.timeGrains]) })
+    maxFilters: config.maxFilters, maxTopN: config.maxTopN, maxFilterValues: config.maxFilterValues,
+    maxInputChars: config.maxInputChars, maxRequestBytes: config.maxRequestBytes, timeGrains: Object.freeze([...config.timeGrains]) })
   const metricMap = immutableMap([...metrics.entries()])
   const dimensionMap = immutableMap([...dimensions.entries()])
   const catalogLimits = () => ({ maxSelectedMetrics: limits.maxSelectedMetrics, maxDimensions: limits.maxDimensions,
-    maxFilters: limits.maxFilters, maxTopN: limits.maxTopN, timeGrains: [...limits.timeGrains] })
+    maxFilters: limits.maxFilters, maxTopN: limits.maxTopN, maxFilterValues: limits.maxFilterValues,
+    maxInputChars: limits.maxInputChars, maxRequestBytes: limits.maxRequestBytes, timeGrains: [...limits.timeGrains] })
   return Object.freeze({ metrics: metricMap, dimensions: dimensionMap, limits,
     metricCatalog: () => ({ metrics: [...metricMap.values()].map(catalogMetric), limits: catalogLimits() }),
     dimensionCatalog: () => ({ dimensions: [...dimensionMap.values()].map(catalogDimension), limits: catalogLimits() }),

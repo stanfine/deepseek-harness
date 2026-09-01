@@ -19,7 +19,8 @@ const datasets: ReaderConfig['datasets'] = {
 
 function semanticConfig(): SemanticConfig {
   return {
-    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 10, timeGrains: ['day', 'week', 'month'],
+    maxSelectedMetrics: 5, maxDimensions: 2, maxFilters: 4, maxTopN: 10,
+    maxFilterValues: 20, maxInputChars: 128, maxRequestBytes: 8192, timeGrains: ['day', 'week', 'month'],
     metrics: [
       { id: 'sales_amount', name: '销售额', dataset: 'facts', kind: 'sum', field: 'amount', format: 'currency',
         description: 'Configured sales amount.', limitations: ['Accounting treatment requires source-owner confirmation.'] },
