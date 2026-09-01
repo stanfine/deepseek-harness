@@ -2,6 +2,23 @@ import { expect, it } from 'vitest'
 import { ANALYSIS_META_MAX_BYTES, readAnalysis } from '../src/client/analysis-model.ts'
 import { analysis } from './fixtures/crm-analysis.ts'
 
+it('accepts all planner-budgeted rows for a trend even when they exceed ranking Top N', () => {
+  const meta = analysis()
+  meta.crmAnalysis.request.intent = 'trend'
+  meta.crmAnalysis.data.request.intent = 'trend'
+  meta.crmAnalysis.request.timeGrain = 'day'
+  meta.crmAnalysis.data.request.timeGrain = 'day'
+  meta.crmAnalysis.request.limit = 20
+  meta.crmAnalysis.data.request.limit = 20
+  meta.crmAnalysis.request.dimensions = ['day']
+  meta.crmAnalysis.data.request.dimensions = ['day']
+  meta.crmAnalysis.data.columns.dimensions = [{ id: 'day', name: '日期', dataType: 'date', composition: 'unknown' }]
+  meta.crmAnalysis.data.rows = Array.from({ length: 31 }, (_, index) => ({
+    dimensions: { day: `2025-07-${String(index + 1).padStart(2, '0')}` }, metrics: { sales_amount: { value: index + 1, comparisonValue: index + 1, changeRatio: 0 } },
+  }))
+  expect(readAnalysis(meta)).not.toBeNull()
+})
+
 it('accepts persisted summary, trend, ranking, composition, and two-metric results', () => {
   const variants = [
     analysis(),
@@ -75,17 +92,21 @@ it('rejects impossible metric availability and change states', () => {
   for (const value of [unavailableChanged, zeroChanged, availableMissing]) expect(readAnalysis(value)).toBeNull()
 })
 
+function projectionBytes(value: ReturnType<typeof analysis>): number {
+  return new TextEncoder().encode(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(value.crmAnalysis.data) }], meta: value })).byteLength
+}
+
 function byteSizedAnalysis(target: number) {
   const value = analysis(); value.crmAnalysis.request.limit = 500; value.crmAnalysis.data.request = value.crmAnalysis.request
   const original = value.crmAnalysis.data.rows[0]!
   value.crmAnalysis.data.rows = Array.from({ length: 500 }, () => ({
-    dimensions: { channel: '三'.repeat(660) }, metrics: structuredClone(original.metrics),
+    dimensions: { channel: '三'.repeat(309) }, metrics: structuredClone(original.metrics),
   }))
   value.crmAnalysis.data.rows[499]!.dimensions.channel = ''
-  const bytes = new TextEncoder().encode(JSON.stringify(value.crmAnalysis)).byteLength
+  const bytes = projectionBytes(value)
   const remaining = target - bytes
   if (remaining < 0 || remaining > 6000) throw new Error('Fixture cannot reach requested byte size')
-  value.crmAnalysis.data.rows[499]!.dimensions.channel = '三'.repeat(Math.floor(remaining / 3)) + 'a'.repeat(remaining % 3)
+  value.crmAnalysis.data.rows[499]!.dimensions.channel = 'a'.repeat(Math.floor(remaining / 2))
   return value
 }
 
@@ -94,10 +115,11 @@ it('bounds full persisted UTF-8 metadata and rows by the normalized limit', () =
   tooManyRows.crmAnalysis.data.request = tooManyRows.crmAnalysis.request
   tooManyRows.crmAnalysis.data.rows.push(structuredClone(tooManyRows.crmAnalysis.data.rows[0]!))
   const exact = byteSizedAnalysis(ANALYSIS_META_MAX_BYTES)
-  expect(new TextEncoder().encode(JSON.stringify(exact.crmAnalysis))).toHaveLength(ANALYSIS_META_MAX_BYTES)
+  expect(projectionBytes(exact)).toBeLessThanOrEqual(ANALYSIS_META_MAX_BYTES)
   expect(readAnalysis(exact)).not.toBeNull()
   const last = exact.crmAnalysis.data.rows[499]!
   last.dimensions.channel = `${String(last.dimensions.channel)}a`
+  expect(projectionBytes(exact)).toBeGreaterThan(ANALYSIS_META_MAX_BYTES)
   expect(readAnalysis(exact)).toBeNull()
   expect(readAnalysis(tooManyRows)).toBeNull()
 })

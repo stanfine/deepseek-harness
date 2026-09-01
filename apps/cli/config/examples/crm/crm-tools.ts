@@ -6,7 +6,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
-import { executeSemanticAnalysis } from './semantic-analysis.ts'
+import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
 import { WeeklyReportReader, type WeeklyReportConfig } from './weekly-report.ts'
 import type { CrmExcelExports } from './crm-excel-host.ts'
@@ -109,6 +109,35 @@ function weeklyConfig(config: ReaderConfig): WeeklyReportConfig {
 
 function json(value: unknown): JsonValue { return value as JsonValue }
 
+/** Build the exact retained semantic tool projection used by content and presentation metadata.
+ * @param result Closed semantic analysis result.
+ * @returns Final tool content and metadata fields.
+ */
+export function semanticToolProjection(result: SemanticAnalysisResultV1) {
+  const content = [{ type: 'text' as const, text: JSON.stringify(result) }]
+  const meta = { crmAnalysis: { version: 1 as const, request: result.request, data: result } }
+  return { content, meta }
+}
+
+/** Measure the UTF-8 serialization of the final retained semantic tool projection.
+ * @param result Closed semantic analysis result.
+ * @returns Serialized byte length including text escaping and outer field names.
+ */
+export function semanticToolProjectionBytes(result: SemanticAnalysisResultV1): number {
+  return Buffer.byteLength(JSON.stringify(semanticToolProjection(result)))
+}
+
+/** Reject a semantic result whose final retained tool projection exceeds its byte budget.
+ * @param result Closed semantic analysis result.
+ * @param maxBytes Positive retained projection budget.
+ * @throws {Error} When the final projection exceeds the budget.
+ */
+export function assertSemanticToolProjectionSize(result: SemanticAnalysisResultV1, maxBytes = CRM_ANALYSIS_MAX_BYTES): void {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || semanticToolProjectionBytes(result) > maxBytes) {
+    throw new Error('Semantic analysis tool projection byte limit exceeded')
+  }
+}
+
 /** Register read-only tools; disposal removes every contribution.
  * @param ctx Agent-scoped plugin context.
  * @param config Explicit transport, field mapping and budgets.
@@ -209,7 +238,9 @@ export function apply(ctx: Context, config: CrmConfig): void {
     if (!drilldown && ('drilldownDimension' in request || 'parentFilters' in request)) throw new Error('Unknown analysis argument')
     const plan = resolveAnalysisPlan(semanticModel, request,
       { maxRangeDays: config.maxRangeDays, maxBuckets: config.maxBuckets })
-    return json(await executeSemanticAnalysis(reader, semanticModel, plan, signal))
+    const result = await executeSemanticAnalysis(reader, semanticModel, plan, signal)
+    assertSemanticToolProjectionSize(result)
+    return json(result)
   }
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_metric_catalog', description: 'List configured CRM business metrics, meanings, availability, and limits.',

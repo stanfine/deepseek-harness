@@ -9,6 +9,9 @@ function report() { return readAnalysis(analysis())! }
 it('uses donut only for additive metrics and mutually exclusive composition dimensions', () => {
   const value = report(); value.request.intent = 'composition'; delete value.request.comparison
   expect(selectAnalysisView(value).type).toBe('donut')
+  value.columns.dimensions[0]!.composition = 'unknown'
+  expect(selectAnalysisView(value).type).not.toBe('donut')
+  value.columns.dimensions[0]!.composition = 'mutually_exclusive'
   value.columns.metrics[0]!.additivity = 'non_additive'
   expect(selectAnalysisView(value).type).not.toBe('donut')
 })

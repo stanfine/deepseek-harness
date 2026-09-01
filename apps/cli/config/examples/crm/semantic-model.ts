@@ -58,7 +58,7 @@ export interface DimensionDefinition {
   timeGrains?: readonly TimeGrain[]
   description: string
   limitations: readonly string[]
-  composition?: 'mutually_exclusive' | 'overlapping' | 'high_cardinality'
+  composition?: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' | 'unknown'
 }
 
 /** Deployment-owned business definitions and analysis limits. */
@@ -175,7 +175,7 @@ function validateDimension(definition: DimensionDefinition, datasets: Record<str
     }
   } else if (definition.timeGrains?.length) throw new Error('Only date dimensions support time grains')
   if (!Array.isArray(definition.limitations) || definition.limitations.some(limitation => !validText(limitation))) throw new Error('Invalid dimension limitations')
-  if (definition.composition !== undefined && !['mutually_exclusive', 'overlapping', 'high_cardinality'].includes(definition.composition)) {
+  if (definition.composition !== undefined && !['mutually_exclusive', 'overlapping', 'high_cardinality', 'unknown'].includes(definition.composition)) {
     throw new Error('Invalid dimension composition semantics')
   }
 }
@@ -241,7 +241,7 @@ function catalogMetric(definition: MetricDefinition): JsonValue {
 function catalogDimension(definition: DimensionDefinition): JsonValue {
   return { id: definition.id, name: definition.name, dataset: definition.dataset, dataType: definition.dataType,
     filters: [...definition.filters], ...(definition.timeGrains === undefined ? {} : { timeGrains: [...definition.timeGrains] }),
-    composition: definition.composition ?? (definition.dataType === 'keyword' ? 'mutually_exclusive' : 'high_cardinality'),
+    composition: definition.composition ?? 'unknown',
     description: definition.description, limitations: [...definition.limitations] }
 }
 

@@ -546,7 +546,7 @@ describe('headless recorded-session snapshots', () => {
     expect(resultMeta('crm_analyze_1')).toMatchObject({ crmAnalysis: { version: 1,
       request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], comparison: 'previous_period' },
       data: { warnings: [expect.stringContaining('outside the returned terms buckets'),
-        expect.stringContaining('no matching comparison bucket')] } } })
+        expect.stringContaining('Source history')] } } })
     expect(resultMeta('crm_drilldown_1')).toMatchObject({ crmAnalysis: { version: 1,
       request: { dimensions: ['channel', 'store'], filters: [{ dimension: 'channel', values: ['pos'] }] },
       data: { rows: [{ dimensions: { channel: 'pos', store: 'S-001' } }] } } })

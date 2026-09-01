@@ -3,9 +3,10 @@ import { createServer, type RequestListener } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
-import { resolveAnalysisPlan, type AnalysisRequest } from '../config/examples/crm/analysis-planner.ts'
+import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from '../config/examples/crm/analysis-planner.ts'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from '../config/examples/crm/elasticsearch.ts'
 import { executeSemanticAnalysis } from '../config/examples/crm/semantic-analysis.ts'
+import { assertSemanticToolProjectionSize, semanticToolProjection, semanticToolProjectionBytes } from '../config/examples/crm/crm-tools.ts'
 import { resolveSemanticModel, type SemanticConfig } from '../config/examples/crm/semantic-model.ts'
 
 const datasets: ReaderConfig['datasets'] = {
@@ -67,12 +68,13 @@ async function fixture(handler: (...args: Parameters<RequestListener>) => unknow
 
 function elastic(aggregations: JsonValue, total = 3): JsonValue {
   const addCoverage = (value: unknown): void => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return
+    if (Array.isArray(value)) { for (const item of value) addCoverage(item); return }
+    if (!value || typeof value !== 'object') return
     const record = value as Record<string, unknown>
     for (const key of Object.keys(record)) {
       const match = /^m(\d+)$/.exec(key)
-      if (match && !Object.hasOwn(record, `${key}_coverage`) && typeof record.doc_count === 'number') {
-        record[`${key}_coverage`] = { value: record.doc_count }
+      if (match && !Object.hasOwn(record, `${key}_missing`) && typeof record.doc_count === 'number') {
+        record[`${key}_missing`] = { doc_count: 0 }
       }
       addCoverage(record[key])
     }
@@ -94,6 +96,15 @@ function resolved(request: AnalysisRequest) {
 }
 
 describe('CRM semantic analysis executor', () => {
+  it('rejects a missing sum coverage companion instead of publishing an exact value', async () => {
+    const endpoint = await fixture((_request, response) => response.end(JSON.stringify({ timed_out: false,
+      _shards: { failed: 0 }, hits: { total: { value: 1, relation: 'eq' }, hits: [] }, aggregations: {
+        source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') }, current: { doc_count: 1, m0: { value: 20 } },
+      } })))
+    const { model, plan } = resolved({ metrics: ['sales_amount'], start: '2025-05-01', end: '2025-06-01', intent: 'summary' })
+    await expect(executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal))
+      .rejects.toThrow(/aggregation response/i)
+  })
   it('compiles exact configured filters and source measures without scripts or credentials', async () => {
     let body: Record<string, unknown> = {}
     let authorization = ''
@@ -426,14 +437,22 @@ describe('CRM semantic analysis executor', () => {
       .resolves.toEqual(first)
     await expect(executeSemanticAnalysis(reader(endpoint, { maxResponseBytes: bytes - 1 }), model, plan, new AbortController().signal))
       .rejects.toThrow(/result byte limit exceeded/)
+    const projection = semanticToolProjection(first)
+    const projectionBytes = Buffer.byteLength(JSON.stringify(projection))
+    expect(semanticToolProjectionBytes(first)).toBe(projectionBytes)
+    expect(projection.content[0]?.text).toBe(JSON.stringify(first))
+    expect(() => { assertSemanticToolProjectionSize(first, projectionBytes) }).not.toThrow()
+    expect(() => { assertSemanticToolProjectionSize(first, projectionBytes - 1) }).toThrow(/tool projection byte limit exceeded/)
+    const multibyte = structuredClone(first); multibyte.warnings.push('缺失')
+    expect(semanticToolProjectionBytes(multibyte) - semanticToolProjectionBytes(first)).toBeGreaterThan('缺失'.length)
   })
 
   it('marks partial sum coverage and its derived ratio unavailable in grouped comparisons', async () => {
     const endpoint = await fixture((_request, response) => response.end(JSON.stringify(elastic({
       source_coverage: { value: Date.parse('2024-01-01T16:30:00Z') },
       current: { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
-        { key: 'online', doc_count: 2, m0: { value: 100 }, m0_missing: { doc_count: 1 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
-        { key: 'store', doc_count: 1, m0: { value: 0 }, m0_missing: { doc_count: 1 }, m1: { value: 1 }, m1_missing: { doc_count: 0 } },
+        { key: 'online', doc_count: 2, m0: { value: 100 }, m0_missing: { doc_count: 1 }, m1: { value: 2 }, m1_missing: { doc_count: 1 } },
+        { key: 'store', doc_count: 1, m0: { value: 0 }, m0_missing: { doc_count: 1 }, m1: { value: 1 }, m1_missing: { doc_count: 1 } },
       ] }, d0_missing: { doc_count: 0 } },
       comparison: { doc_count: 3, d0: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0, buckets: [
         { key: 'online', doc_count: 2, m0: { value: 80 }, m0_missing: { doc_count: 0 }, m1: { value: 2 }, m1_missing: { doc_count: 0 } },
@@ -450,7 +469,8 @@ describe('CRM semantic analysis executor', () => {
     expect(result.rows[1]?.metrics.sales_amount).toMatchObject({
       value: null, unavailableReason: '1 matching documents have missing sales_amount values',
     })
-    expect(result.completeness).toMatchObject({ complete: false, missingMetricDocuments: 2 })
+    expect(result.completeness).toMatchObject({ complete: false, missingMetricValues: 4 })
+    expect(result.completeness.missingMetricValues).toBeGreaterThan(result.coverage.current.recordCount)
     expect(result.coverage.current.observedStart).toBe('2024-01-02')
   })
 
@@ -469,5 +489,32 @@ describe('CRM semantic analysis executor', () => {
       { range: { private_order_date: { gte: '2025-05-01T00:00:00+08:00', lt: '2025-05-02T00:00:00+08:00' } } },
       { range: { private_order_date: { gte: '2025-05-03T00:00:00+08:00', lt: '2025-05-04T00:00:00+08:00' } } },
     ] } }] } } })
+  })
+
+  it('compiles month drilldown parents for current and shifted comparison windows', async () => {
+    type FilterBody = { aggs: { current: { filter: { bool: { filter: unknown[] } } }
+      comparison: { filter: { bool: { filter: unknown[] } } } } }
+    let body: FilterBody | undefined
+    const endpoint = await fixture(async (request, response) => {
+      let text = ''; for await (const chunk of request) text += String(chunk)
+      body = JSON.parse(text) as FilterBody
+      const month = (key: string) => ({ key_as_string: key, doc_count: 1,
+        d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
+          buckets: [{ key: 'online', doc_count: 1, m0: { value: 10 }, m0_missing: { doc_count: 0 } }] },
+        d1_missing: { doc_count: 0 } })
+      response.end(JSON.stringify(elastic({ source_coverage: { value: Date.parse('2024-01-01T00:00:00Z') },
+        current: { doc_count: 1, d0: { buckets: [month('2025-05-01')] }, d0_missing: { doc_count: 0 } },
+        comparison: { doc_count: 2, d0: { buckets: [month('2025-03-01'), month('2025-04-01')] }, d0_missing: { doc_count: 0 } } })))
+    })
+    const model = resolveSemanticModel(semanticConfig(), datasets)
+    const request: DrilldownRequest = { metrics: ['sales_amount'], dimensions: ['day'], timeGrain: 'month',
+      start: '2025-05-01', end: '2025-06-01', comparison: 'previous_period', intent: 'comparison',
+      drilldownDimension: 'channel', parentFilters: [{ dimension: 'day', values: ['2025-05-01'] }] }
+    const plan = resolveAnalysisPlan(model, request, { maxRangeDays: limits.maxRangeDays, maxBuckets: limits.maxBuckets })
+    await executeSemanticAnalysis(reader(endpoint), model, plan, new AbortController().signal)
+    expect(body?.aggs.current.filter.bool.filter[1]).toEqual({ range: { private_order_date: {
+      gte: '2025-05-01T00:00:00+08:00', lt: '2025-06-01T00:00:00+08:00' } } })
+    expect(body?.aggs.comparison.filter.bool.filter[1]).toEqual({ range: { private_order_date: {
+      gte: '2025-03-01T00:00:00+08:00', lt: '2025-04-01T00:00:00+08:00' } } })
   })
 })

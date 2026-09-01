@@ -3,7 +3,7 @@ export type AnalysisIntent = 'summary' | 'trend' | 'ranking' | 'composition' | '
 /** A closed metric format supplied by the semantic catalog. */
 export type AnalysisMetricFormat = 'currency' | 'number' | 'decimal'
 /** One selected dimension column. */
-export interface AnalysisDimensionColumn { id: string; name: string; dataType: 'date' | 'keyword'; composition: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' }
+export interface AnalysisDimensionColumn { id: string; name: string; dataType: 'date' | 'keyword'; composition: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' | 'unknown' }
 /** One selected metric column. */
 export interface AnalysisMetricColumn { id: string; name: string; format: AnalysisMetricFormat; additivity: 'additive' | 'non_additive'; description: string; limitations: string[] }
 /** Persisted current and optional comparison values; the client never derives them. */
@@ -57,7 +57,7 @@ export interface AnalysisReport {
     limitedRows: number
     countErrorUpperBound: number
     approximateMetrics: string[]
-    missingMetricDocuments: number
+    missingMetricValues: number
   }
   warnings: string[]
   drilldownDimensions: string[]
@@ -69,6 +69,13 @@ const MAX_LIST = 100
 const ID = /^[a-z][a-z0-9_]{0,63}$/
 /** Maximum UTF-8 bytes accepted for the complete persisted `crmAnalysis` wrapper. */
 export const ANALYSIS_META_MAX_BYTES = 1048576
+
+function retainedProjectionBytes(crmAnalysis: Record<string, unknown>): number {
+  const data = crmAnalysis.data
+  return new TextEncoder().encode(JSON.stringify({
+    content: [{ type: 'text', text: JSON.stringify(data) }], meta: { crmAnalysis },
+  })).byteLength
+}
 
 function object(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function finite(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) }
@@ -112,7 +119,7 @@ function request(value: unknown): value is AnalysisReportRequest {
 
 function dimensionColumn(value: unknown): value is AnalysisDimensionColumn {
   return object(value) && exactKeys(value, ['id', 'name', 'dataType', 'composition']) && id(value.id) && text(value.name)
-    && ['date', 'keyword'].includes(String(value.dataType)) && ['mutually_exclusive', 'overlapping', 'high_cardinality'].includes(String(value.composition))
+    && ['date', 'keyword'].includes(String(value.dataType)) && ['mutually_exclusive', 'overlapping', 'high_cardinality', 'unknown'].includes(String(value.composition))
 }
 function metricColumn(value: unknown): value is AnalysisMetricColumn {
   return object(value) && exactKeys(value, ['id', 'name', 'format', 'additivity', 'description', 'limitations']) && id(value.id) && text(value.name)
@@ -184,13 +191,13 @@ function comparisonWindow(selected: AnalysisReportRequest): { start: string; end
   return { start: shiftedDate(selected.start, shift), end: shiftedDate(selected.end, shift) }
 }
 function completeness(value: unknown, metrics: readonly string[]): value is AnalysisReport['completeness'] {
-  if (!object(value) || !exactKeys(value, ['complete', 'missingDimensionDocuments', 'omittedDocuments', 'limitedRows', 'countErrorUpperBound', 'approximateMetrics', 'missingMetricDocuments'])
+  if (!object(value) || !exactKeys(value, ['complete', 'missingDimensionDocuments', 'omittedDocuments', 'limitedRows', 'countErrorUpperBound', 'approximateMetrics', 'missingMetricValues'])
     || typeof value.complete !== 'boolean' || !count(value.missingDimensionDocuments) || !count(value.omittedDocuments)
-    || !count(value.limitedRows) || !count(value.countErrorUpperBound) || !count(value.missingMetricDocuments)
+    || !count(value.limitedRows) || !count(value.countErrorUpperBound) || !count(value.missingMetricValues)
     || !idList(value.approximateMetrics, 5)
     || !value.approximateMetrics.every(metric => metrics.includes(metric))) return false
   return !value.complete || value.missingDimensionDocuments === 0 && value.omittedDocuments === 0 && value.limitedRows === 0
-    && value.countErrorUpperBound === 0 && value.approximateMetrics.length === 0 && value.missingMetricDocuments === 0
+    && value.countErrorUpperBound === 0 && value.approximateMetrics.length === 0 && value.missingMetricValues === 0
 }
 function sameRequest(left: AnalysisReportRequest, right: AnalysisReportRequest): boolean {
   return left.start === right.start && left.end === right.end && left.intent === right.intent && left.comparison === right.comparison
@@ -209,7 +216,7 @@ export function readAnalysis(meta: unknown): AnalysisReport | null {
   if (!object(meta) || !object(meta.crmAnalysis) || !exactKeys(meta.crmAnalysis, ['version', 'request', 'data'])
     || meta.crmAnalysis.version !== 1 || !request(meta.crmAnalysis.request) || !object(meta.crmAnalysis.data)) return null
   try {
-    if (new TextEncoder().encode(JSON.stringify(meta.crmAnalysis)).byteLength > ANALYSIS_META_MAX_BYTES) return null
+    if (retainedProjectionBytes(meta.crmAnalysis) > ANALYSIS_META_MAX_BYTES) return null
   } catch { return null }
   const outerRequest = meta.crmAnalysis.request
   const data = meta.crmAnalysis.data
@@ -219,7 +226,7 @@ export function readAnalysis(meta: unknown): AnalysisReport | null {
   const declared = data.columns
   const comparisonAvailable = outerRequest.comparison === undefined || object(data.coverage)
     && object(data.coverage.comparison) && data.coverage.comparison.available
-  if (!Array.isArray(data.rows) || data.rows.length > MAX_ROWS || data.rows.length > outerRequest.limit
+  if (!Array.isArray(data.rows) || data.rows.length > MAX_ROWS || outerRequest.intent !== 'trend' && data.rows.length > outerRequest.limit
     || !data.rows.every(item => row(item, outerRequest, declared, comparisonAvailable))
     || !completeness(data.completeness, outerRequest.metrics) || !stringList(data.warnings)
     || !idList(data.drilldownDimensions, 100) || data.drilldownDimensions.some(id => outerRequest.dimensions.includes(id))) return null

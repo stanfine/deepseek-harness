@@ -39,7 +39,7 @@ interface TestAnalysis {
         limitedRows: number
         countErrorUpperBound: number
         approximateMetrics: string[]
-        missingMetricDocuments: number
+        missingMetricValues: number
       }
       warnings: string[]
       drilldownDimensions: string[]
@@ -58,7 +58,7 @@ export function analysis(): TestAnalysis {
       comparison: { kind: 'previous_period', start: '2025-05-31', end: '2025-07-01', recordCount: 2, available: true,
         observedStart: '2024-01-01' } },
     completeness: { complete: true, missingDimensionDocuments: 0, omittedDocuments: 0, limitedRows: 0,
-      countErrorUpperBound: 0, approximateMetrics: [], missingMetricDocuments: 0 },
+      countErrorUpperBound: 0, approximateMetrics: [], missingMetricValues: 0 },
     warnings: [], drilldownDimensions: ['store'] }
   return { crmAnalysis: { version: 1, request, data } }
 }

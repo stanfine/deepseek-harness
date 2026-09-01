@@ -94,6 +94,13 @@ describe('CRM semantic model', () => {
     expect(JSON.stringify([model.metricCatalog(), model.dimensionCatalog()])).not.toMatch(/private_(amount|customer|order_date|province)/)
   })
 
+  it('defaults omitted dimension composition to unknown rather than claiming exclusivity', () => {
+    const dimensions = resolveSemanticModel(semanticConfig(), datasets).dimensionCatalog() as {
+      dimensions: Array<{ id: string; composition: string }>
+    }
+    expect(dimensions.dimensions.find(dimension => dimension.id === 'province')?.composition).toBe('unknown')
+  })
+
   it('rejects a dimension whose dataset has no available metric', () => {
     const config = semanticConfig()
     config.dimensions.push({ id: 'series', name: '系列', dataset: 'items', field: 'series', dataType: 'keyword',

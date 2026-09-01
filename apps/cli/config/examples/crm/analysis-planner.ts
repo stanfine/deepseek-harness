@@ -66,6 +66,7 @@ export interface ResolvedAnalysisFilter {
   dimension: DimensionDefinition
   operator: DimensionFilter
   values: readonly string[]
+  relativeToWindow?: true
 }
 /** Metric order used after source aggregations have completed. */
 export type DerivedMetric = RatioMetricDefinition
@@ -287,7 +288,7 @@ export function resolveAnalysisPlan(
     for (const parent of request.parentFilters) {
       const filter = resolveFilter(model, dataset, { dimension: parent.dimension, operator: 'in', values: parent.values })
       if (!dimensions.some(selected => selected.id === filter.dimension.id)) throw new Error('Drilldown parent dimension must be selected')
-      filters.push(filter)
+      filters.push({ ...filter, relativeToWindow: true })
     }
     if (filters.length > model.limits.maxFilters) throw new Error('Too many filters')
     dimensions.push(drilldown)

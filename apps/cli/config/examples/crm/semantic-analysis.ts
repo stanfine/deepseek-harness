@@ -33,7 +33,7 @@ export interface AnalysisCompleteness {
   limitedRows: number
   countErrorUpperBound: number
   approximateMetrics: string[]
-  missingMetricDocuments: number
+  missingMetricValues: number
 }
 
 /** Versioned, model-safe result produced from one resolved semantic plan. */
@@ -52,7 +52,7 @@ export interface SemanticAnalysisResultV1 {
     limit: number
   }
   columns: {
-    dimensions: { id: string; name: string; dataType: DimensionDefinition['dataType']; composition: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' }[]
+    dimensions: { id: string; name: string; dataType: DimensionDefinition['dataType']; composition: 'mutually_exclusive' | 'overlapping' | 'high_cardinality' | 'unknown' }[]
     metrics: { id: string; name: string; format: MetricDefinition['format']; additivity: 'additive' | 'non_additive'; description: string; limitations: string[] }[]
   }
   rows: AnalysisRow[]
@@ -165,15 +165,42 @@ function sourceAggregations(source: ConfiguredAggregationSource, plan: ResolvedA
   return aggs
 }
 
-function queryFilters(source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan): JsonValue[] {
-  const filters: JsonValue[] = [...source.baseFilters]
-  for (const filter of plan.filters) {
+function shiftDate(value: string, from: string, to: string): string {
+  const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000
+  return dateText(new Date(Date.parse(`${value}T00:00:00Z`) + days * 86400000))
+}
+
+function filterEnd(value: string, grain: NonNullable<ResolvedAnalysisPlan['timeGrain']>): string {
+  return dateText(nextCalendarBucket(new Date(`${value}T00:00:00Z`), grain))
+}
+
+function relativeBucketValue(value: string, plan: ResolvedAnalysisPlan, window: AnalysisWindow): string {
+  if (window.start === plan.start) return value
+  const grain = plan.timeGrain ?? 'day'
+  const index = calendarBuckets(plan, grain).indexOf(value)
+  if (index < 0) throw new Error('Drilldown date parent is outside the current bucket sequence')
+  const shifted = calendarBuckets(window, grain)
+  if (index >= shifted.length) throw new Error('Drilldown date parent has no comparison bucket')
+  return shifted[index]!
+}
+
+function queryFilters(
+  source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan, window: AnalysisWindow, relative: boolean,
+): JsonValue[] {
+  const filters: JsonValue[] = []
+  for (const filter of plan.filters.filter(candidate => Boolean(candidate.relativeToWindow) === relative)) {
     const field = source.dimensionField(filter.dimension.field)
     if (filter.dimension.dataType === 'date') {
-      const ranges = filter.values.map(value => ({ range: { [field]: {
-        gte: `${value}T00:00:00${source.timeZone}`,
-        lt: `${new Date(Date.parse(`${value}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)}T00:00:00${source.timeZone}`,
-      } } }))
+      const grain = plan.dimensions.some(dimension => dimension.id === filter.dimension.id) ? plan.timeGrain ?? 'day' : 'day'
+      const ranges = filter.values.map((sourceValue) => {
+        const value = filter.relativeToWindow && plan.dimensions.some(dimension => dimension.id === filter.dimension.id)
+          ? relativeBucketValue(sourceValue, plan, window)
+          : shiftDate(sourceValue, plan.start, window.start)
+        return { range: { [field]: {
+          gte: `${value}T00:00:00${source.timeZone}`,
+          lt: `${filterEnd(value, grain)}T00:00:00${source.timeZone}`,
+        } } }
+      })
       filters.push(ranges.length === 1 ? ranges[0]! : { bool: { should: ranges, minimum_should_match: 1 } })
     } else filters.push(filter.operator === 'equals'
       ? { term: { [field]: filter.values[0]! } }
@@ -199,19 +226,25 @@ function dimensionAggregations(
 function compile(source: ConfiguredAggregationSource, plan: ResolvedAnalysisPlan): JsonValue {
   const aggs: ObjectValue = {
     source_coverage: { min: { field: source.dimensionField('time') } },
-    current: { filter: rangeFilter(source, plan.start, plan.end), aggs: dimensionAggregations(source, plan, plan.start, plan.end) },
+    current: { filter: plan.filters.some(filter => filter.relativeToWindow)
+      ? { bool: { filter: [rangeFilter(source, plan.start, plan.end), ...queryFilters(source, plan, plan, true)] } }
+      : rangeFilter(source, plan.start, plan.end),
+    aggs: dimensionAggregations(source, plan, plan.start, plan.end) },
   }
-  if (plan.comparison) aggs.comparison = { filter: rangeFilter(source, plan.comparison.start, plan.comparison.end),
-    aggs: dimensionAggregations(source, plan, plan.comparison.start, plan.comparison.end) }
-  return { size: 0, query: { bool: { filter: queryFilters(source, plan) } }, aggs }
+  if (plan.comparison) aggs.comparison = { filter: plan.filters.some(filter => filter.relativeToWindow)
+    ? { bool: { filter: [rangeFilter(source, plan.comparison.start, plan.comparison.end),
+      ...queryFilters(source, plan, plan.comparison, true)] } }
+    : rangeFilter(source, plan.comparison.start, plan.comparison.end),
+  aggs: dimensionAggregations(source, plan, plan.comparison.start, plan.comparison.end) }
+  return { size: 0, query: { bool: { filter: [...source.baseFilters, ...queryFilters(source, plan, plan, false)] } }, aggs }
 }
 
 function sourceValue(container: ObjectValue, metric: ResolvedAnalysisPlan['sourceMeasures'][number], index: number): ParsedMetric {
   if (metric.kind === 'count') return { value: count(container.doc_count) }
   if (metric.kind === 'distinct_count') return { value: 0 }
   const documents = count(container.doc_count)
-  const coverage = container[`m${index}_missing`]
-  const missingDocuments = coverage === undefined ? 0 : count(object(coverage).doc_count)
+  const coverage = object(container[`m${index}_missing`])
+  const missingDocuments = count(coverage.doc_count)
   if (missingDocuments > documents) throw new Error('Invalid Elasticsearch metric field coverage')
   if (missingDocuments > 0) return { value: null, reason: `${missingDocuments} matching documents have missing ${metric.id} values` }
   const value = metricNumber(object(container[`m${index}`]).value)
@@ -320,7 +353,8 @@ async function exactDistinctValues(
       const composite: ObjectValue = { size: source.distinctPageSize, sources: distinctSources(source, plan, metric) }
       if (after !== undefined) composite.after = after
       const response = object(await search({ size: 0, query: { bool: { filter: [
-        ...queryFilters(source, plan), rangeFilter(source, start, end),
+        ...source.baseFilters, rangeFilter(source, start, end), ...queryFilters(source, plan, { start, end }, false),
+        ...queryFilters(source, plan, { start, end }, true),
       ] } }, aggs: { distinct: { composite } } }))
       const distinct = object(object(response.aggregations).distinct)
       if (!Array.isArray(distinct.buckets) || distinct.buckets.length > source.distinctPageSize) {
@@ -483,7 +517,7 @@ export async function executeSemanticAnalysis(
   const missingCurrentBuckets = plan.comparison !== undefined && !historyUnavailable
     && comparisonRows.some(row => !currentByKey.has(row.joinKey))
   const approximateMetrics: string[] = []
-  const missingMetricDocuments = [...currentRows, ...comparisonRows].reduce((total, row) => total
+  const missingMetricValues = [...currentRows, ...comparisonRows].reduce((total, row) => total
     + plan.sourceMeasures.reduce((rowTotal, metric) => {
       const reason = row.values.get(metric.id)?.reason
       const match = reason === undefined ? undefined : /^(\d+) matching documents have missing/.exec(reason)
@@ -493,14 +527,14 @@ export async function executeSemanticAnalysis(
     complete: currentCompleteness.missingBuckets === 0 && currentCompleteness.omittedBuckets === 0
       && currentCompleteness.countErrorUpperBound === 0 && comparisonCompleteness.missingBuckets === 0
       && comparisonCompleteness.omittedBuckets === 0 && comparisonCompleteness.countErrorUpperBound === 0
-      && approximateMetrics.length === 0 && missingMetricDocuments === 0 && !historyUnavailable
+      && approximateMetrics.length === 0 && missingMetricValues === 0 && !historyUnavailable
       && !missingComparisonBuckets && !missingCurrentBuckets
       && limitedRows === 0,
     missingDimensionDocuments: currentCompleteness.missingBuckets + comparisonCompleteness.missingBuckets,
     omittedDocuments: currentCompleteness.omittedBuckets + comparisonCompleteness.omittedBuckets,
     limitedRows,
     countErrorUpperBound: currentCompleteness.countErrorUpperBound + comparisonCompleteness.countErrorUpperBound,
-    approximateMetrics, missingMetricDocuments,
+    approximateMetrics, missingMetricValues,
   }
   const warnings: string[] = []
   if (completeness.missingDimensionDocuments > 0) warnings.push(`${completeness.missingDimensionDocuments} matching documents have missing dimension values.`)
@@ -508,7 +542,7 @@ export async function executeSemanticAnalysis(
   if (completeness.limitedRows > 0) warnings.push(`${completeness.limitedRows} grouped rows are outside the requested Top N.`)
   if (completeness.countErrorUpperBound > 0) warnings.push(`Terms counts have an error bound of ${completeness.countErrorUpperBound}.`)
   if (approximateMetrics.length > 0) warnings.push(`Distinct-count metrics are approximate: ${approximateMetrics.join(', ')}.`)
-  if (missingMetricDocuments > 0) warnings.push('One or more metric values are unavailable because matching documents omit the configured field.')
+  if (missingMetricValues > 0) warnings.push(`${missingMetricValues} grouped metric values are unavailable because matching documents omit configured fields; this is not a unique document count.`)
   if (historyUnavailable) warnings.push('Source history does not cover the requested comparison start.')
   if (missingComparisonBuckets) warnings.push('One or more current rows have no matching comparison bucket.')
   if (missingCurrentBuckets) warnings.push('One or more comparison rows have no matching current bucket.')
@@ -518,7 +552,7 @@ export async function executeSemanticAnalysis(
     request: normalizedRequest(plan),
     columns: {
       dimensions: plan.dimensions.map(dimension => ({ id: dimension.id, name: dimension.name, dataType: dimension.dataType,
-        composition: dimension.composition ?? (dimension.dataType === 'keyword' ? 'mutually_exclusive' : 'high_cardinality') })),
+        composition: dimension.composition ?? 'unknown' })),
       metrics: plan.metrics.map(metric => ({ id: metric.id, name: metric.name, format: metric.format,
         additivity: metric.additivity ?? (metric.kind === 'sum' || metric.kind === 'count' ? 'additive' : 'non_additive'),
         description: metric.description, limitations: [...metric.limitations] })),
@@ -542,6 +576,8 @@ export async function executeSemanticAnalysis(
   }
   const persisted = { version: 1, request: result.request, data: result }
   const bytes = Buffer.byteLength(JSON.stringify(result)) + Buffer.byteLength(JSON.stringify(persisted))
-  if (bytes > Math.min(executed.maxResultBytes, CRM_ANALYSIS_MAX_BYTES)) throw new Error('Semantic analysis result byte limit exceeded')
+  if (bytes > Math.min(executed.maxResultBytes, CRM_ANALYSIS_MAX_BYTES)) {
+    throw new Error('Semantic analysis result byte limit exceeded')
+  }
   return result
 }

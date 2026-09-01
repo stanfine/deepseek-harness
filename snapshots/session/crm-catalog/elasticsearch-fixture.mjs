@@ -15,14 +15,15 @@ export async function apply(ctx) {
       return
     }
     const filtered = body.query.bool.filter.some(filter => filter.term?.channelId === 'pos'
-      || filter.terms?.channelId?.includes('pos'))
+      || filter.terms?.channelId?.includes('pos')) || (JSON.stringify(body.aggs?.current?.filter) ?? '').includes('"pos"')
     const count = filtered ? 2 : 3
-    const group = (key, amount, documents) => ({ key, doc_count: documents, m0: { value: amount } })
+    const group = (key, amount, documents) => ({ key, doc_count: documents, m0: { value: amount }, m0_missing: { doc_count: 0 } })
     const semanticGroups = filtered
       ? [{ key: 'pos', doc_count: 2, d1: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0,
         buckets: [group('S-001', 100, 2)] }, d1_missing: { doc_count: 0 } }]
       : [group('pos', 100, 2), group('online', 20, 1)]
     const semanticWindow = (comparison) => ({ doc_count: comparison ? 1 : count, m0: { value: comparison ? 40 : filtered ? 100 : 120 },
+      m0_missing: { doc_count: 0 },
       d0: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0, buckets: comparison
         ? (filtered ? [{ key: 'pos', doc_count: 1, d1: { sum_other_doc_count: 0, doc_count_error_upper_bound: 0,
           buckets: [group('S-001', 40, 1)] }, d1_missing: { doc_count: 0 } }] : [group('pos', 40, 1)])
