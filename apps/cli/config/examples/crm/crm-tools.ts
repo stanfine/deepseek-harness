@@ -5,6 +5,7 @@ import { defineTool, type ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
+import { resolveMarketingModel, type MarketingConfig } from './marketing-model.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
@@ -44,6 +45,18 @@ export const Config = z.object({
       composition: z.string(), description: z.string().required(), limitations: z.array(z.string()).required(),
     })).required(),
   }).required(),
+  marketing: z.object({ opportunities: z.array(z.object({
+    id: z.string().required(), title: z.string().required(), dataset: z.string().required(), comparison: z.string().required(),
+    rule: z.object({
+      kind: z.string().required(), metric: z.string().required(), threshold: z.number().required(), dimension: z.string(),
+    }).required(),
+    primaryMetrics: z.array(z.string()).required(), guardrailMetrics: z.array(z.string()).required(),
+    impactWeight: z.number().required(), riskWeight: z.number().required(), actionTemplate: z.string().required(),
+    audienceConditions: z.array(z.object({
+      kind: z.string().required(), dimension: z.string(), segment: z.string(),
+    })).required(),
+    requiredConcepts: z.array(z.string()), limitations: z.array(z.string()).required(),
+  })).required() }).required(),
   report: z.object({
     fiscalYearStartMonth: z.number().required(), orderFactsDataset: z.string().required(), orderItemsDataset: z.string().required(),
     lifecycleHistoryCompleteFrom: z.string(), weeklyMultipleOrdersAreRepeatPurchasers: z.boolean().required(),
@@ -66,7 +79,7 @@ function downloadBaseUrl(value: string): string {
   return url.origin
 }
 
-type CrmConfig = ReaderConfig & { excel: ExcelConfig; semantic: SemanticConfig }
+type CrmConfig = ReaderConfig & { excel: ExcelConfig; semantic: SemanticConfig; marketing: MarketingConfig }
 
 function recommendations(value: unknown, config: ExcelConfig): WorkbookRecommendation[] {
   if (value === undefined) return []
@@ -149,6 +162,7 @@ export function apply(ctx: Context, config: CrmConfig): void {
   }
   const exportBaseUrl = downloadBaseUrl(config.excel.downloadBaseUrl)
   const semanticModel = resolveSemanticModel(config.semantic, config.datasets)
+  resolveMarketingModel(config.marketing, semanticModel)
   const reader = new ElasticsearchReader(resolveConfig(config, process.env))
   const weekly = new WeeklyReportReader(weeklyConfig(config), (dataset, body, signal) => reader.searchConfigured(dataset, body, signal))
   let excelExports: CrmExcelExports | undefined

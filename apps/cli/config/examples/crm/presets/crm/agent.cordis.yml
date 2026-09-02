@@ -241,6 +241,82 @@
           timeGrains: [month]
           description: 订单日期按自然月分组。
           limitations: [日期覆盖范围不证明历史完整。]
+    marketing:
+      opportunities:
+        - id: channel_optimization
+          title: 优化低效渠道
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: decline, metric: sales_amount, dimension: channel, threshold: 0.1 }
+          primaryMetrics: [sales_amount]
+          guardrailMetrics: [atv]
+          impactWeight: 0.8
+          riskWeight: 0.2
+          actionTemplate: 复核下降渠道的商品、客单价与触达策略，形成小范围人工验证方案。
+          audienceConditions: [{ kind: dimension_value, dimension: channel }]
+          limitations: [仅使用汇总订单证据，不代表活动归因或可触达客户。]
+        - id: store_improvement
+          title: 改善低效门店
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: below_average, metric: sales_amount, dimension: store, threshold: 0.15 }
+          primaryMetrics: [sales_amount]
+          guardrailMetrics: [atv]
+          impactWeight: 0.7
+          riskWeight: 0.25
+          actionTemplate: 复核低于同组平均的门店，设计门店级人工验证方案。
+          audienceConditions: [{ kind: dimension_value, dimension: store }]
+          limitations: [门店规模与营业天数尚未标准化。]
+        - id: atv_growth
+          title: 提升客单价
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: decline, metric: atv, threshold: 0.05 }
+          primaryMetrics: [atv]
+          guardrailMetrics: [order_count]
+          impactWeight: 0.65
+          riskWeight: 0.25
+          actionTemplate: 围绕组合购或价格带设计小范围人工验证方案。
+          audienceConditions: []
+          limitations: [当前订单口径未确认退款、取消和去重规则。]
+        - id: items_per_order_growth
+          title: 提升连带率
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: decline, metric: items_per_order, threshold: 0.05 }
+          primaryMetrics: [items_per_order]
+          guardrailMetrics: [atv]
+          impactWeight: 0.6
+          riskWeight: 0.2
+          actionTemplate: 围绕关联商品组合设计小范围人工验证方案。
+          audienceConditions: []
+          limitations: [件数及退货处理口径需要数据所有者确认。]
+        - id: reactivation
+          title: 沉睡会员唤醒
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: growth, metric: lifecycle, threshold: 0.05 }
+          primaryMetrics: [lifecycle]
+          guardrailMetrics: [sales_amount]
+          impactWeight: 0.8
+          riskWeight: 0.5
+          actionTemplate: 在会员口径完备后准备分层唤醒验证方案。
+          audienceConditions: [{ kind: member_segment, segment: inactive }]
+          requiredConcepts: [recency, consent, spend, identity]
+          limitations: [当前配置缺少沉睡定义、触达同意、消费分层与稳定身份映射。]
+        - id: repurchase_growth
+          title: 提升复购
+          dataset: orders
+          comparison: previous_period
+          rule: { kind: growth, metric: repeat_purchase, threshold: 0.05 }
+          primaryMetrics: [repeat_purchase]
+          guardrailMetrics: [sales_amount]
+          impactWeight: 0.75
+          riskWeight: 0.45
+          actionTemplate: 在复购和可触达口径完备后准备人工验证方案。
+          audienceConditions: [{ kind: member_segment, segment: recent_buyer }]
+          requiredConcepts: [recency, consent, spend, identity]
+          limitations: [当前配置缺少复购定义、触达同意、消费分层与稳定身份映射。]
     report:
       fiscalYearStartMonth: 4
       orderFactsDataset: order_facts
