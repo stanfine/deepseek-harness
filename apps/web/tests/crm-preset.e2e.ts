@@ -16,9 +16,11 @@ it('mounts the CRM example through the Web session controller', async () => {
       if (!body.aggs?.current) { response.writeHead(400); response.end(); return }
       const groupedField = body.aggs.current.aggs?.d0?.terms?.field
       const nestedField = body.aggs.current.aggs?.d0?.aggs?.d1?.terms?.field
-      const group = (key: string, amount: number, count: number) => ({ key, doc_count: count, m0: { value: amount } })
+      const group = (key: string, amount: number, count: number) => ({
+        key, doc_count: count, m0: { value: amount }, m0_missing: { doc_count: 0 },
+      })
       const window = (groups?: Array<{ key: string; doc_count: number }>) => groups === undefined
-        ? { doc_count: 4, m0: { value: 100 } }
+        ? { doc_count: 4, m0: { value: 100 }, m0_missing: { doc_count: 0 } }
         : { doc_count: groups.reduce((total, item) => total + item.doc_count, 0),
           d0: { sum_other_doc_count: 1, doc_count_error_upper_bound: 0, buckets: groups }, d0_missing: { doc_count: 0 } }
       const nested = (amounts: [number, number]) => [{ key: 'pos', doc_count: 3,
@@ -95,7 +97,7 @@ it('mounts the CRM example through the Web session controller', async () => {
       metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], start: '2025-01-01', end: '2025-02-01',
       comparison: 'previous_period', intent: 'comparison', limit: 10,
     }, callId: ToolCallId('crm-web-analysis'), signal: new AbortController().signal })
-    expect(analysis.isError).toBe(false)
+    expect(analysis.isError, JSON.stringify(analysis)).toBe(false)
     expect(analysis.meta).toMatchObject({ crmAnalysis: { version: 1,
       request: { metrics: ['sales_amount', 'order_count', 'atv'], dimensions: ['channel'], comparison: 'previous_period' },
       data: { version: 1, rows: [{ dimensions: { channel: 'pos' } }, { dimensions: { channel: 'online' } }],

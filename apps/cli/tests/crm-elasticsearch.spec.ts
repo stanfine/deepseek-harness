@@ -44,6 +44,13 @@ const config = {
         description: 'Configured channel.', limitations: [] },
     ],
   },
+  marketing: { opportunities: [{
+    id: 'channel_optimization', title: '优化渠道', dataset: 'order_facts', comparison: 'previous_period',
+    rule: { kind: 'decline', metric: 'sales_amount', dimension: 'channel', threshold: 0.1 },
+    primaryMetrics: ['sales_amount'], guardrailMetrics: ['order_count'], impactWeight: 0.8, riskWeight: 0.2,
+    actionTemplate: '复核下降渠道。', audienceConditions: [{ kind: 'dimension_value', dimension: 'channel' }],
+    limitations: ['Aggregate evidence only.'],
+  }] },
 }
 const env = { TEST_USER: 'fixture-user', TEST_PASSWORD: 'fixture-password' }
 const response = (aggregations: object = {}, hits: object[] = []) => ({ timed_out: false, _shards: { failed: 0 },

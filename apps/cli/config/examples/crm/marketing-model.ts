@@ -1,5 +1,4 @@
 /** Governed CRM marketing opportunities resolved against the semantic catalog. */
-import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { ResolvedSemanticModel } from './semantic-model.ts'
 
 /** Supported period comparison for opportunity evidence. */
@@ -174,7 +173,7 @@ export function resolveMarketingModel(config: MarketingConfig, semantic: Resolve
       limitations: Object.freeze([...value.limitations]) })
   }))
   return Object.freeze({
-    opportunityCatalog: () => catalog as unknown as JsonValue as readonly OpportunityCatalogItem[],
+    opportunityCatalog: () => catalog,
     resolveOpportunity(id: string) {
       const value = definitions.get(id)
       if (!value) throw new Error(`Unknown opportunity id ${id}`)
