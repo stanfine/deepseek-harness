@@ -32,7 +32,7 @@ An opportunity is available only when its required semantic concepts are availab
 
 `crm_recommend_opportunities` accepts an inclusive start date, exclusive end date, comparison kind, and an optional bounded list of opportunity ids. The schema accepts no index, physical field, formula, script, DSL, arbitrary rule, or activity type. The evaluator expands every selected opportunity into fixed semantic analysis requests, executes them through the existing planner and provider, validates coverage and completeness, applies configured rules, and retains the normalized requests as evidence references.
 
-Each candidate receives a deterministic score from evidence strength, estimated impact, completeness, and configured risk. The evaluator returns no more than three candidates ordered by that score. The model receives the closed candidates and writes concise explanations that cite their returned metric values, periods, coverage, and limitations. The tool rejects model text that introduces unsupported metrics, audience conditions, channels, or mechanisms.
+Each candidate receives a deterministic score from evidence strength, estimated impact, completeness, and configured risk. The evaluator returns no more than three candidates ordered by that score, with a configured title and action template plus calculated evidence fields. The model can summarize these persisted fields in its assistant response but cannot write free text into the recommendation object or introduce unsupported metrics, audience conditions, channels, or mechanisms.
 
 ## Tool Interfaces
 
