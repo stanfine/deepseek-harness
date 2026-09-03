@@ -6,7 +6,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
 import { resolveMarketingModel, type MarketingConfig } from './marketing-model.ts'
-import { buildMaAudience, resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
+import { buildMaAudience, maEntityIdFor, resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
 import { buildCatalogCanvas, resolveCanvasConfig, type CanvasConfig } from './campaign-canvas.ts'
 import { createCampaignPlan, findRecommendation, type CampaignActivation } from './campaign-planner.ts'
 import { createCampaignDraft, findCampaignPlan } from './campaign-draft-creator.ts'
@@ -415,8 +415,9 @@ export function apply(ctx: Context, config: CrmConfig): void {
       if (!policy) throw new Error('No governed audience policy is configured')
       const audience = buildMaAudience(policy, recommendation, plan.planId, plan.audiencePreview.estimatedCount)
       const canvas = buildCatalogCanvas(canvasConfig, plan)
-      const campaign: ResolvedMaCampaign = { id: `campaign_${plan.planId}`, name: `CRM ${recommendation.title}`,
-        groupId: plan.activation.group.id, campaignCode: `CRM_${plan.planId}`, category: plan.activation.category.id,
+      const campaignId = maEntityIdFor('campaign', plan.planId)
+      const campaign: ResolvedMaCampaign = { id: campaignId, name: `CRM ${recommendation.title}`,
+        groupId: plan.activation.group.id, campaignCode: `CRM_${campaignId}`, category: plan.activation.category.id,
         type: 'FLOW', priority: 5,
         summary: recommendation.actionTemplate,
         setting: canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, extra: { planId: plan.planId } }

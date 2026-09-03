@@ -29,6 +29,8 @@
         passwordEnv: DSH_CRM_MA_PASSWORD
         timeoutMs: 30000
         maxResponseBytes: 1048576
+        campaignLeadTimeDays: 1
+        campaignDurationDays: 30
     - id: crm-cdp-provider
       name: ./cdp-http-provider.ts
       disabled: !!js process.env.DSH_CRM_CDP_URL === undefined

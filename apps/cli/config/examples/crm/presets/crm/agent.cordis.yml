@@ -385,6 +385,7 @@
             kind: ma_delivery
             templateId: !!js process.env.DSH_CRM_MA_DELIVERY_TEMPLATE_ID || 'unconfigured_sms_template'
             capabilityId: !!js process.env.DSH_CRM_MA_DELIVERY_CAPABILITY_ID || 'unconfigured_sms_capability'
+            reachField: !!js process.env.DSH_CRM_MA_DELIVERY_REACH_FIELD || 'Customer.basicInfo.mobile'
           - id: welcome_coupon
             kind: loyalty_coupon
             templateId: !!js process.env.DSH_CRM_LOYALTY_COUPON_TEMPLATE_ID || 'unconfigured_coupon_template'

@@ -15,7 +15,8 @@ async function endpoint(handler: (request: IncomingMessage, response: ServerResp
 
 function config(url: string) {
   return resolveMaConfig({ endpoint: url, allowHttp: true, allowUnauthenticated: true, tenantId: 'mkt', buCode: 'catering',
-    usernameEnv: 'MA_USER', passwordEnv: 'MA_PASSWORD', timeoutMs: 100, maxResponseBytes: 1024 }, {})
+    usernameEnv: 'MA_USER', passwordEnv: 'MA_PASSWORD', timeoutMs: 100, maxResponseBytes: 1024,
+    campaignLeadTimeDays: 1, campaignDurationDays: 30 }, {})
 }
 
 describe('CRM MA HTTP provider', () => {
@@ -48,12 +49,27 @@ describe('CRM MA HTTP provider', () => {
       setting: { dwhType: 'lianwei_cdp', audienceGroup: 'outside' } })
   })
 
+  it('accepts successful empty create responses using submitted stable identities', async () => {
+    const url = await endpoint((_request, response) => { response.statusCode = 200; response.end() })
+    const provider = new CrmMaHttpProvider(config(url), {})
+    const audience = { id: 'audience-id', name: 'Audience', description: 'Governed', selectType: 'CONDITION',
+      usageType: 'CAMPAIGN', filter: { all: [] }, setting: {}, extra: {} }
+    await expect(provider.createAudience(audience, 'key', AbortSignal.timeout(500)))
+      .resolves.toEqual({ id: 'audience-id', name: 'Audience' })
+    const campaign = { id: 'campaign-id', name: 'Campaign', groupId: 'group', campaignCode: 'CRM_campaign-id',
+      category: 'category', type: 'FLOW', priority: 5, summary: 'Summary', setting: {}, extra: {} }
+    await expect(provider.createCampaignDraft(campaign, 'key', AbortSignal.timeout(500)))
+      .resolves.toEqual({ id: 'campaign-id', name: 'Campaign', status: 'DRAFT' })
+  })
+
   it('requires explicit HTTP and unauthenticated policies', () => {
     expect(() => resolveMaConfig({ endpoint: 'http://example.test', allowHttp: false, allowUnauthenticated: true,
-      tenantId: 'mkt', buCode: 'catering', usernameEnv: 'U', passwordEnv: 'P', timeoutMs: 10, maxResponseBytes: 10 }, {}))
+      tenantId: 'mkt', buCode: 'catering', usernameEnv: 'U', passwordEnv: 'P', timeoutMs: 10, maxResponseBytes: 10,
+      campaignLeadTimeDays: 1, campaignDurationDays: 30 }, {}))
       .toThrow(/HTTPS required/)
     expect(() => resolveMaConfig({ endpoint: 'https://example.test', allowHttp: false, allowUnauthenticated: false,
-      tenantId: 'mkt', buCode: 'catering', usernameEnv: 'U', passwordEnv: 'P', timeoutMs: 10, maxResponseBytes: 10 }, {}))
+      tenantId: 'mkt', buCode: 'catering', usernameEnv: 'U', passwordEnv: 'P', timeoutMs: 10, maxResponseBytes: 10,
+      campaignLeadTimeDays: 1, campaignDurationDays: 30 }, {}))
       .toThrow(/credentials/i)
   })
 

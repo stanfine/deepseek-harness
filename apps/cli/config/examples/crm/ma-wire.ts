@@ -51,14 +51,15 @@ export function compileMaFlowData(canvas: ResolvedMaCanvas, audienceId: MaAudien
   if (canvas.nodes.length !== 4 || canvas.edges.length !== 3) throw new Error('Invalid governed MA canvas')
   const [entry, audience, action, end] = canvas.nodes
   if (!entry || !audience || !action || !end) throw new Error('Invalid governed MA canvas')
-  const actionConfig = action.config as { kind?: string; templateId?: string; capabilityId?: string }
+  const actionConfig = action.config as { kind?: string; templateId?: string; capabilityId?: string; reachField?: string }
   const edges = canvas.edges.map(edge => ({ id: edge.id, shape: 'edge', zIndex: 0,
     target: { cell: edge.target, port: 'in-top-1' }, source: { cell: edge.source, port: 'in-top-3' } }))
   const actionNode = actionConfig.kind === 'loyalty_coupon'
     ? { id: action.id, shape: 'CouponNode', zIndex: 3, data: { capabilityId: actionConfig.capabilityId,
       frequencyLimit: true, _type: 'coupon', _name: '卡券', configId: 'COUPON' }, position: { x: 510, y: 550 } }
     : { id: action.id, shape: 'FlowContentNode', zIndex: 3, data: { flowContentId: actionConfig.templateId,
-      configId: actionConfig.capabilityId, _type: 'flow_content', _name: '营销触达' }, position: { x: 510, y: 550 } }
+      configId: actionConfig.capabilityId, _type: 'flow_content', _name: '营销触达', limit: false,
+      reachField: actionConfig.reachField }, position: { x: 510, y: 550 } }
   return [...edges,
     { id: entry.id, shape: 'StartNode', zIndex: 1, data: { _name: '开始', _type: 'start' }, position: { x: 510, y: 100 } },
     { id: audience.id, shape: 'AudienceNode', zIndex: 2, data: { multiple: false, audienceId, unique: true,

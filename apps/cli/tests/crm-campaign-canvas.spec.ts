@@ -4,7 +4,8 @@ import { buildSinglePathCanvas, resolveCanvasConfig } from '../config/examples/c
 function config() {
   return { nodeTypes: { entry: 'AUDIENCE_ENTRY', condition: 'CONDITION', action: 'ACTION', end: 'END' }, connectorId: 'sequence',
     actions: [
-      { id: 'sms_offer', kind: 'ma_delivery', templateId: 'sms-approved', capabilityId: 'sms-capability' },
+      { id: 'sms_offer', kind: 'ma_delivery', templateId: 'sms-approved', capabilityId: 'sms-capability',
+        reachField: 'Customer.basicInfo.mobile' },
       { id: 'welcome_coupon', kind: 'loyalty_coupon', templateId: 'coupon-approved', capabilityId: 'benefit-capability' },
     ] }
 }
@@ -28,7 +29,8 @@ describe('CRM campaign canvas', () => {
       { id: 'edge_2_plan_abc', source: 'condition_plan_abc', target: 'action_plan_abc', connectorId: 'sequence' },
       { id: 'edge_3_plan_abc', source: 'action_plan_abc', target: 'end_plan_abc', connectorId: 'sequence' },
     ])
-    expect(canvas.nodes[2]?.config).toMatchObject({ capabilityId })
+    expect(canvas.nodes[2]?.config).toMatchObject({ capabilityId,
+      ...(action.kind === 'ma_delivery' ? { reachField: 'Customer.basicInfo.mobile' } : {}) })
   })
 
   it('rejects non-allowlisted templates, capabilities, and arbitrary configuration keys', () => {

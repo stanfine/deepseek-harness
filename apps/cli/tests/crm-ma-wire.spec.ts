@@ -15,7 +15,8 @@ describe('CRM MA wire compiler', () => {
   it('emits MA X6 flowData and wraps it as a FLOW campaign setting', () => {
     const flow = compileMaFlowData({ nodes: [
       { id: 'start', type: 'START', config: {} }, { id: 'audience', type: 'AUDIENCE', config: {} },
-      { id: 'delivery', type: 'ACTION', config: { kind: 'ma_delivery', templateId: 'welcome', capabilityId: 'sms' } },
+      { id: 'delivery', type: 'ACTION', config: { kind: 'ma_delivery', templateId: 'welcome', capabilityId: 'sms',
+        reachField: 'Customer.basicInfo.mobile' } },
       { id: 'end', type: 'END', config: {} },
     ], edges: [
       { id: 'e1', source: 'start', target: 'audience', connectorId: 'sequence' },
@@ -24,7 +25,8 @@ describe('CRM MA wire compiler', () => {
     ] }, 'aud-1' as never)
     const items = flow as unknown as { shape?: string; data?: Record<string, unknown> }[]
     expect(items.find(item => item.shape === 'AudienceNode')?.data).toMatchObject({ audienceId: 'aud-1' })
-    expect(items.find(item => item.shape === 'FlowContentNode')?.data).toMatchObject({ flowContentId: 'welcome', configId: 'sms' })
+    expect(items.find(item => item.shape === 'FlowContentNode')?.data).toMatchObject({ flowContentId: 'welcome', configId: 'sms',
+      reachField: 'Customer.basicInfo.mobile', limit: false })
     const setting = compileMaCampaignSetting(flow) as { type: string; flowData: string }
     expect(setting.type).toBe('FLOW')
     expect(JSON.parse(setting.flowData) as unknown).toEqual(flow)

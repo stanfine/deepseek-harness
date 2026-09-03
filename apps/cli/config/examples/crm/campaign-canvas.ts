@@ -6,7 +6,7 @@ import type { CampaignPlanResultV1 } from './campaign-planner.ts'
 export type CampaignAction = { kind: 'ma_delivery'; templateId: string }
   | { kind: 'loyalty_coupon'; templateId: string; capabilityId: string }
 /** Deployment-owned action definition. */
-export interface CanvasActionDefinition { id: string; kind: CampaignAction['kind']; templateId: string; capabilityId: string }
+export interface CanvasActionDefinition { id: string; kind: CampaignAction['kind']; templateId: string; capabilityId: string; reachField?: string }
 /** Deployment-owned node, connector, and action allowlists. */
 export interface CanvasConfig {
   nodeTypes: { entry: string; condition: string; action: string; end: string }
@@ -41,10 +41,11 @@ export function resolveCanvasConfig(config: CanvasConfig): ResolvedCanvasConfig 
     || !Array.isArray(config.actions) || config.actions.length === 0) throw new Error('Invalid canvas configuration')
   const keys = new Set<string>()
   const actions = config.actions.map((action) => {
-    exact(action, ['id', 'kind', 'templateId', 'capabilityId'])
+    exact(action, ['id', 'kind', 'templateId', 'capabilityId', 'reachField'])
     const key = `${action.kind}:${action.templateId}`
     if (keys.has(key) || !['ma_delivery', 'loyalty_coupon'].includes(action.kind)
-      || !action.id.trim() || !action.templateId.trim() || !action.capabilityId.trim()) throw new Error('Invalid canvas action')
+      || !action.id.trim() || !action.templateId.trim() || !action.capabilityId.trim()
+      || action.kind === 'ma_delivery' && !action.reachField?.trim()) throw new Error('Invalid canvas action')
     keys.add(key)
     return Object.freeze({ ...action })
   })
@@ -71,7 +72,7 @@ export function buildSinglePathCanvas(
     { id: ids.entry, type: config.nodeTypes.entry, config: { planId: plan.planId } },
     { id: ids.condition, type: config.nodeTypes.condition, config: { estimatedCount: plan.audiencePreview.estimatedCount ?? null } },
     { id: ids.action, type: config.nodeTypes.action, config: { kind: selected.kind, templateId: selected.templateId,
-      capabilityId: selected.capabilityId } },
+      capabilityId: selected.capabilityId, ...(selected.reachField === undefined ? {} : { reachField: selected.reachField }) } },
     { id: ids.end, type: config.nodeTypes.end, config: {} },
   ].map(item => Object.freeze(item))
   const pairs = [[ids.entry, ids.condition], [ids.condition, ids.action], [ids.action, ids.end]] as const
@@ -87,11 +88,13 @@ export function buildSinglePathCanvas(
  */
 export function buildCatalogCanvas(config: ResolvedCanvasConfig, plan: CampaignPlanResultV1): ResolvedMaCanvas {
   const { content } = plan.activation
-  return buildCanvas(config, plan, { kind: 'ma_delivery', templateId: content.id }, content.flowNodeId)
+  const selected = config.actions.find(item => item.kind === 'ma_delivery')
+  if (!selected) throw new Error('Campaign delivery action is not configured')
+  return buildCanvas(config, plan, { kind: 'ma_delivery', templateId: content.id }, content.flowNodeId, selected.reachField)
 }
 
 function buildCanvas(
-  config: ResolvedCanvasConfig, plan: CampaignPlanResultV1, action: CampaignAction, capabilityId: string,
+  config: ResolvedCanvasConfig, plan: CampaignPlanResultV1, action: CampaignAction, capabilityId: string, reachField?: string,
 ): ResolvedMaCanvas {
   if (!plan.readyForCreation || plan.status !== 'preview') throw new Error('Campaign plan is not ready for canvas generation')
   const suffix = plan.planId
@@ -99,7 +102,8 @@ function buildCanvas(
   const nodes = [
     { id: ids.entry, type: config.nodeTypes.entry, config: { planId: plan.planId } },
     { id: ids.condition, type: config.nodeTypes.condition, config: { estimatedCount: plan.audiencePreview.estimatedCount ?? null } },
-    { id: ids.action, type: config.nodeTypes.action, config: { ...action, capabilityId } },
+    { id: ids.action, type: config.nodeTypes.action, config: { ...action, capabilityId,
+      ...(reachField === undefined ? {} : { reachField }) } },
     { id: ids.end, type: config.nodeTypes.end, config: {} },
   ].map(item => Object.freeze(item))
   const pairs = [[ids.entry, ids.condition], [ids.condition, ids.action], [ids.action, ids.end]] as const

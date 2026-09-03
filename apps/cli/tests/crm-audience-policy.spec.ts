@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMaAudience, resolveAudiencePolicy } from '../config/examples/crm/audience-policy.ts'
+import { buildMaAudience, maEntityIdFor, resolveAudiencePolicy } from '../config/examples/crm/audience-policy.ts'
 
 const marketing = { opportunityCatalog: () => [{ id: 'channel_optimization', available: true }],
   resolveOpportunity: () => ({ id: 'channel_optimization', audiencePolicyId: 'channel_policy',
@@ -19,10 +19,15 @@ const recommendation = { recommendationId: 'rec_x', opportunityId: 'channel_opti
   ], coverage: {}, completeness: {}, warnings: [] }] }
 
 describe('CRM audience policy', () => {
+  it('derives stable deployment-sized MA identifiers', () => {
+    expect(maEntityIdFor('audience', 'plan_example')).toHaveLength(22)
+    expect(maEntityIdFor('audience', 'plan_example')).toBe(maEntityIdFor('audience', 'plan_example'))
+    expect(maEntityIdFor('audience', 'plan_example')).not.toBe(maEntityIdFor('campaign', 'plan_example'))
+  })
   it('resolves exact configured mappings and builds an immutable MA audience', () => {
     const policies = resolveAudiencePolicy(config() as never, marketing as never)
     const audience = buildMaAudience(policies.get('channel_optimization')!, recommendation as never, 'plan_1')
-    expect(audience).toMatchObject({ id: 'aud_plan_1', selectType: 'CONDITION', usageType: 'CAMPAIGN', filter: { all: [
+    expect(audience).toMatchObject({ id: maEntityIdFor('audience', 'plan_1'), selectType: 'CONDITION', usageType: 'CAMPAIGN', filter: { all: [
       { source: 'tag', key: 'preferred_channel', operator: 'in', values: ['STORE'] },
       { source: 'tag', key: 'marketing_consent', operator: 'not_equals', values: ['false'] },
     ] }, extra: { planId: 'plan_1', policyId: 'channel_policy' } })

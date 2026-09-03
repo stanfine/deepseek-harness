@@ -58,7 +58,7 @@ const config = {
       ], maxEstimatedSize: 1000, actionIds: ['sms_offer'] }],
     canvas: { nodeTypes: { entry: 'AUDIENCE_ENTRY', condition: 'CONDITION', action: 'ACTION', end: 'END' },
       connectorId: 'sequence', actions: [{ id: 'sms_offer', kind: 'ma_delivery', templateId: 'sms-template',
-        capabilityId: 'sms-capability' }] },
+        capabilityId: 'sms-capability', reachField: 'Customer.basicInfo.mobile' }] },
   },
 }
 const env = { TEST_USER: 'fixture-user', TEST_PASSWORD: 'fixture-password' }

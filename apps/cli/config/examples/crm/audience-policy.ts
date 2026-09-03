@@ -1,4 +1,5 @@
 /** Governed evidence-to-MA audience policy resolution. */
+import { createHash } from 'node:crypto'
 import type { ResolvedMaAudience } from './ma-service.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { MarketingModel } from './marketing-model.ts'
@@ -30,6 +31,10 @@ export type ResolvedAudiencePolicies = ReadonlyMap<string, Readonly<AudiencePoli
 
 const id = /^[a-z][a-z0-9_]*$/
 const fieldPath = /^[A-Za-z][A-Za-z0-9_.]*$/
+/** Derive a stable identifier that fits MA entity ids. */
+export function maEntityIdFor(kind: 'audience' | 'campaign', planId: string): string {
+  return createHash('sha256').update(`${kind}:${planId}`).digest('base64url').slice(0, 22)
+}
 function exact(value: object, keys: readonly string[], message: string): void {
   if (Object.keys(value).some(key => !keys.includes(key))) throw new Error(message)
 }
@@ -91,7 +96,7 @@ export function buildMaAudience(
   const all = [{ source: policy.source, key: policy.key, operator: policy.operator, values: values as string[] },
     ...policy.mandatoryExclusions.map(item => ({ source: item.source, key: item.key,
       operator: 'not_equals', values: [item.value] }))]
-  return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
+  return Object.freeze({ id: maEntityIdFor('audience', planId), name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
     selectType: 'CONDITION', usageType: 'CAMPAIGN',
     filter: Object.freeze({ all: Object.freeze(all.map(item => Object.freeze(item))) }) as unknown as JsonValue,
     setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })

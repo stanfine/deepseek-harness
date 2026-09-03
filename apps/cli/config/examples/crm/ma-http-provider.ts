@@ -17,6 +17,8 @@ export interface MaConfig {
   passwordEnv: string
   timeoutMs: number
   maxResponseBytes: number
+  campaignLeadTimeDays: number
+  campaignDurationDays: number
 }
 
 /** Cordis configuration schema for the MA provider. */
@@ -24,6 +26,7 @@ export const Config = z.object({
   endpoint: z.string().required(), allowHttp: z.boolean().required(), allowUnauthenticated: z.boolean().required(),
   tenantId: z.string().required(), buCode: z.string().required(), usernameEnv: z.string().required(), passwordEnv: z.string().required(),
   timeoutMs: z.number().required(), maxResponseBytes: z.number().required(),
+  campaignLeadTimeDays: z.number().required(), campaignDurationDays: z.number().required(),
 })
 
 /** Validated MA settings without resolved credential values. */
@@ -49,7 +52,9 @@ export function resolveMaConfig(config: MaConfig, env: NodeJS.ProcessEnv): Resol
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && config.allowHttp)) throw new Error('HTTPS required unless allowHttp is enabled')
   if (!/^[a-z][a-z0-9_-]*$/.test(config.tenantId) || !/^[a-z][a-z0-9_-]*$/.test(config.buCode)) throw new Error('Invalid MA tenant or business unit')
   if (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs <= 0
-    || !Number.isSafeInteger(config.maxResponseBytes) || config.maxResponseBytes <= 0) throw new Error('Invalid MA transport limits')
+    || !Number.isSafeInteger(config.maxResponseBytes) || config.maxResponseBytes <= 0
+    || !Number.isSafeInteger(config.campaignLeadTimeDays) || config.campaignLeadTimeDays < 0
+    || !Number.isSafeInteger(config.campaignDurationDays) || config.campaignDurationDays <= 0) throw new Error('Invalid MA transport limits')
   authorization(config, env)
   return Object.freeze({ ...config, endpoint: url.origin })
 }
@@ -78,7 +83,8 @@ export class CrmMaHttpProvider implements CrmMaService {
     this.env = env
   }
 
-  private async request(path: string, method: 'GET' | 'POST', body: JsonValue | undefined, signal: AbortSignal): Promise<unknown> {
+  private async request(path: string, method: 'GET' | 'POST', body: JsonValue | undefined, signal: AbortSignal,
+    emptyValue?: unknown): Promise<unknown> {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)])
     const auth = authorization(this.config, this.env)
     try {
@@ -88,7 +94,10 @@ export class CrmMaHttpProvider implements CrmMaService {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
       if (!response.ok) throw new Error(`MA HTTP ${response.status}`)
-      if (!response.body) throw new Error('Empty MA response')
+      if (!response.body) {
+        if (emptyValue !== undefined) return emptyValue
+        throw new Error('Empty MA response')
+      }
       const reader = response.body.getReader()
       const chunks: Uint8Array[] = []
       let size = 0
@@ -99,7 +108,9 @@ export class CrmMaHttpProvider implements CrmMaService {
         if (size > this.config.maxResponseBytes) throw new Error('MA response byte limit exceeded')
         chunks.push(chunk.value)
       }
-      try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown }
+      const responseText = Buffer.concat(chunks).toString('utf8')
+      if (!responseText.trim() && emptyValue !== undefined) return emptyValue
+      try { return JSON.parse(responseText) as unknown }
       catch { throw new Error('Invalid MA JSON response') }
     } catch (error) {
       if (error instanceof Error && /^MA HTTP |^MA response |^Invalid MA |^Empty MA /.test(error.message)) throw error
@@ -120,7 +131,8 @@ export class CrmMaHttpProvider implements CrmMaService {
   }
 
   async createAudience(spec: ResolvedMaAudience, key: string, signal: AbortSignal): Promise<MaAudienceRef> {
-    const value = object(await this.request('/audience', 'POST', this.audienceBody(spec, key), signal))
+    const value = object(await this.request('/audience', 'POST', this.audienceBody(spec, key), signal,
+      { id: spec.id, name: spec.name }))
     return { id: text(value.id, 'audience id') as MaAudienceId, name: text(value.name, 'audience name') }
   }
 
@@ -139,8 +151,11 @@ export class CrmMaHttpProvider implements CrmMaService {
   }
 
   async createCampaignDraft(spec: ResolvedMaCampaign, key: string, signal: AbortSignal): Promise<MaCampaignRef> {
+    const startTime = new Date(Date.now() + this.config.campaignLeadTimeDays * 86_400_000)
+    const endTime = new Date(startTime.getTime() + this.config.campaignDurationDays * 86_400_000)
     const value = object(await this.request('/campaign/new', 'POST', { ...spec, status: 'DRAFT', started: false, archived: false,
-      extra: { ...spec.extra, businessKey: key } }, signal))
+      startTime: startTime.toISOString(), endTime: endTime.toISOString(), tags: [],
+      extra: { ...spec.extra, businessKey: key } }, signal, { id: spec.id, name: spec.name, status: 'DRAFT' }))
     return { id: text(value.id, 'campaign id') as MaCampaignId, name: text(value.name, 'campaign name'),
       status: text(value.status, 'campaign status') }
   }
