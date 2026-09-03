@@ -48,7 +48,7 @@ export function findCampaignPlan(session: Session, planId: string): CampaignPlan
   if (found.length === 0) throw new Error('Campaign plan was not found in the current session')
   if (new Set(found.map(value => JSON.stringify(value))).size > 1) throw new Error('Conflicting campaign plan records')
   const plan = found[0]!
-  if (campaignPlanIdFor(plan.recommendationId, plan.audiencePreview) !== plan.planId) throw new Error('Campaign plan digest mismatch')
+  if (campaignPlanIdFor(plan.recommendationId, plan.audiencePreview, plan.activation) !== plan.planId) throw new Error('Campaign plan digest mismatch')
   if (!plan.readyForCreation || plan.status !== 'preview') throw new Error('Campaign plan is not ready for creation')
   return plan
 }

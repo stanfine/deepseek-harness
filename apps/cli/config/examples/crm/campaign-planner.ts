@@ -4,6 +4,17 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import { recommendationIdFor, type AnalyzeOpportunity, type OpportunityRequest,
   type RecommendationEvidence, type RecommendationV1 } from './opportunity-evaluator.ts'
 import type { AudienceCondition, MarketingModel, OpportunityDefinition } from './marketing-model.ts'
+import type { CdpTagCatalogItem } from './cdp-service.ts'
+import type { MaCatalogItem } from './ma-service.ts'
+
+/** Live-system activation values selected and validated before planning. */
+export interface CampaignActivation {
+  audienceTag: CdpTagCatalogItem
+  exclusionTags: readonly CdpTagCatalogItem[]
+  group: MaCatalogItem
+  category: MaCatalogItem
+  content: MaCatalogItem & { flowNodeId: string }
+}
 
 /** Aggregate-only audience estimate used before MA materialization. */
 export interface CampaignAudiencePreview {
@@ -21,6 +32,7 @@ export interface CampaignPlanResultV1 {
   readyForCreation: boolean
   readinessReasons: readonly string[]
   audiencePreview: CampaignAudiencePreview
+  activation: CampaignActivation
   actionTemplate: string
   primaryMetrics: readonly string[]
   guardrailMetrics: readonly string[]
@@ -82,8 +94,8 @@ function triggeringValues(definition: OpportunityDefinition, evidence: Recommend
  * @param audience Aggregate audience preview.
  * @returns Stable opaque plan identity.
  */
-export function campaignPlanIdFor(recommendationId: string, audience: CampaignAudiencePreview): string {
-  return `plan_${createHash('sha256').update(JSON.stringify({ version: 1, recommendationId, audience })).digest('base64url')}`
+export function campaignPlanIdFor(recommendationId: string, audience: CampaignAudiencePreview, activation: CampaignActivation): string {
+  return `plan_${createHash('sha256').update(JSON.stringify({ version: 1, recommendationId, audience, activation })).digest('base64url')}`
 }
 
 /** Prepare one governed campaign preview.
@@ -94,13 +106,15 @@ export function campaignPlanIdFor(recommendationId: string, audience: CampaignAu
  * @returns Campaign preview.
  */
 export function createCampaignPlan(
-  model: MarketingModel, recommendation: RecommendationV1, analyze: AnalyzeOpportunity, signal: AbortSignal,
+  model: MarketingModel, recommendation: RecommendationV1, activation: CampaignActivation,
+  analyze: AnalyzeOpportunity, signal: AbortSignal,
 ): Promise<CampaignPlanResultV1> {
-  return createPlan(model, recommendation, analyze, signal)
+  return createPlan(model, recommendation, activation, analyze, signal)
 }
 
 async function createPlan(
-  model: MarketingModel, recommendation: RecommendationV1, analyze: AnalyzeOpportunity, signal: AbortSignal,
+  model: MarketingModel, recommendation: RecommendationV1, activation: CampaignActivation,
+  analyze: AnalyzeOpportunity, signal: AbortSignal,
 ): Promise<CampaignPlanResultV1> {
   const definition = model.resolveOpportunity(recommendation.opportunityId)
   const reasons: string[] = []
@@ -124,9 +138,9 @@ async function createPlan(
   }
   const audiencePreview = Object.freeze({ conditions: Object.freeze(definition.audienceConditions.map(item => Object.freeze({ ...item }))),
     ...(estimatedCount === undefined ? {} : { estimatedCount }), unavailableReasons: Object.freeze([...reasons]) })
-  return Object.freeze({ version: 1, planId: campaignPlanIdFor(recommendation.recommendationId, audiencePreview),
+  return Object.freeze({ version: 1, planId: campaignPlanIdFor(recommendation.recommendationId, audiencePreview, activation),
     recommendationId: recommendation.recommendationId, status: 'preview', readyForCreation: reasons.length === 0,
-    readinessReasons: Object.freeze(reasons), audiencePreview, actionTemplate: definition.actionTemplate,
+    readinessReasons: Object.freeze(reasons), audiencePreview, activation, actionTemplate: definition.actionTemplate,
     primaryMetrics: Object.freeze([...definition.primaryMetrics]), guardrailMetrics: Object.freeze([...definition.guardrailMetrics]),
     limitations: Object.freeze([...definition.limitations]) })
 }

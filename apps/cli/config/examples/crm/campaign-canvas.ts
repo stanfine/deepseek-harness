@@ -79,3 +79,31 @@ export function buildSinglePathCanvas(
     connectorId: config.connectorId }))
   return Object.freeze({ nodes: Object.freeze(nodes), edges: Object.freeze(edges) })
 }
+
+/** Generate a canvas from content resolved from the live MA catalog.
+ * @param config Resolved node and connector configuration.
+ * @param plan Ready plan containing a validated MA content selection.
+ * @returns Immutable single-path canvas.
+ */
+export function buildCatalogCanvas(config: ResolvedCanvasConfig, plan: CampaignPlanResultV1): ResolvedMaCanvas {
+  const { content } = plan.activation
+  return buildCanvas(config, plan, { kind: 'ma_delivery', templateId: content.id }, content.flowNodeId)
+}
+
+function buildCanvas(
+  config: ResolvedCanvasConfig, plan: CampaignPlanResultV1, action: CampaignAction, capabilityId: string,
+): ResolvedMaCanvas {
+  if (!plan.readyForCreation || plan.status !== 'preview') throw new Error('Campaign plan is not ready for canvas generation')
+  const suffix = plan.planId
+  const ids = { entry: `entry_${suffix}`, condition: `condition_${suffix}`, action: `action_${suffix}`, end: `end_${suffix}` }
+  const nodes = [
+    { id: ids.entry, type: config.nodeTypes.entry, config: { planId: plan.planId } },
+    { id: ids.condition, type: config.nodeTypes.condition, config: { estimatedCount: plan.audiencePreview.estimatedCount ?? null } },
+    { id: ids.action, type: config.nodeTypes.action, config: { ...action, capabilityId } },
+    { id: ids.end, type: config.nodeTypes.end, config: {} },
+  ].map(item => Object.freeze(item))
+  const pairs = [[ids.entry, ids.condition], [ids.condition, ids.action], [ids.action, ids.end]] as const
+  const edges = pairs.map(([source, target], index) => Object.freeze({ id: `edge_${index + 1}_${suffix}`, source, target,
+    connectorId: config.connectorId }))
+  return Object.freeze({ nodes: Object.freeze(nodes), edges: Object.freeze(edges) })
+}

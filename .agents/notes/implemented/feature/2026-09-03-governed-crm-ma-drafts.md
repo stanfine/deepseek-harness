@@ -16,7 +16,7 @@ The CRM example uses a recommendation-first workflow. Deterministic evaluators t
 
 Campaign status and result tools resolve external ids from the current session. Result collection keeps MA and LOYALTY aggregate availability independent and does not expose customers or infer a cross-system join. Conversion and incrementality report explicit unavailability until deployment-owned attribution and holdout rules exist. Client cards validate persisted metadata and reject active drafts, executable fields, and customer-bearing results.
 
-`crm_activation_catalog` reads bounded safe projections from the configured MA and CDP systems. The Agent uses this catalog before planning so external group, category, content, and tag ids come from the deployment rather than source constants or model invention. Catalog reads never return tag conditions or customer records.
+`crm_activation_catalog` reads bounded safe projections from the configured MA and CDP systems. The Agent passes selected target tag, exclusion tag, group, category, and content ids to `crm_campaign_plan`. Planning queries the live catalogs again, rejects missing or disabled entries, requires the content's MA flow-node capability, and includes the safe resolved values in the plan digest. Draft creation consumes only that recorded selection. Catalog reads never return tag conditions or customer records.
 
 ## Alternatives considered
 
@@ -27,4 +27,4 @@ Campaign status and result tools resolve external ids from the current session. 
 
 ## Consequences
 
-The example can create a real but inactive MA draft from a reviewed CRM finding while keeping execution configuration out of model arguments. Durable events support replay and partial recovery, and partial result failures remain visible without leaking provider bodies. Deployments must configure valid MA templates and capabilities before creation becomes ready. They must also supply attribution and holdout definitions before conversion or incrementality can be reported.
+The example can create a real but inactive MA draft from a reviewed CRM finding while binding the write to live-system values validated during planning. Durable events support replay and partial recovery, and partial result failures remain visible without leaking provider bodies. The MA and CDP catalogs must expose the selected activation entries before creation becomes ready. Deployments must also supply attribution and holdout definitions before conversion or incrementality can be reported.

@@ -226,16 +226,39 @@
     },
     {
       "name": "crm_campaign_plan",
-      "description": "Prepare a no-write campaign preview from one recommendation recorded in the current session.",
+      "description": "Validate live CDP and MA selections and prepare a no-write campaign preview from one current-session recommendation.",
       "parameters": {
         "type": "object",
         "properties": {
           "recommendationId": {
             "type": "string"
+          },
+          "audienceTagId": {
+            "type": "string"
+          },
+          "exclusionTagIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "contentId": {
+            "type": "string"
           }
         },
         "required": [
-          "recommendationId"
+          "recommendationId",
+          "audienceTagId",
+          "exclusionTagIds",
+          "groupId",
+          "categoryId",
+          "contentId"
         ]
       }
     },

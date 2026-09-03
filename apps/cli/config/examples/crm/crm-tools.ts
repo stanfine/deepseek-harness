@@ -6,15 +6,15 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
 import { resolveMarketingModel, type MarketingConfig } from './marketing-model.ts'
-import { buildMaAudience, resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
-import { buildSinglePathCanvas, resolveCanvasConfig, type CampaignAction, type CanvasConfig } from './campaign-canvas.ts'
-import { createCampaignPlan, findRecommendation } from './campaign-planner.ts'
+import { buildMaTagAudience, resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
+import { buildCatalogCanvas, resolveCanvasConfig, type CanvasConfig } from './campaign-canvas.ts'
+import { createCampaignPlan, findRecommendation, type CampaignActivation } from './campaign-planner.ts'
 import { createCampaignDraft, findCampaignPlan } from './campaign-draft-creator.ts'
 import { collectCampaignResults, findRecordedCampaign } from './campaign-results.ts'
 import { evaluateOpportunities } from './opportunity-evaluator.ts'
-import type { CrmMaService, ResolvedMaCampaign } from './ma-service.ts'
+import type { CrmMaService, MaCatalogItem, ResolvedMaCampaign } from './ma-service.ts'
 import type { CrmLoyaltyService } from './loyalty-service.ts'
-import type { CrmCdpService } from './cdp-service.ts'
+import type { CdpTagCatalogItem, CrmCdpService } from './cdp-service.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
@@ -366,13 +366,39 @@ export function apply(ctx: Context, config: CrmConfig): void {
       return { crmCampaign: { version: 1, kind, data: value } }
     },
   })
+  const exactMaItem = async (id: string, kind: MaCatalogItem['kind'], signal: AbortSignal): Promise<MaCatalogItem> => {
+    if (!ma) throw new Error('CRM MA service is unavailable')
+    const matches = (await ma.activationCatalog(id, 20, signal)).filter(item => item.id === id && item.kind === kind)
+    if (matches.length !== 1) throw new Error(`Selected MA ${kind} is unavailable`)
+    if (!matches[0]!.enabled) throw new Error(`Selected MA ${kind} is disabled`)
+    return matches[0]!
+  }
+  const exactCdpTag = async (id: string, signal: AbortSignal): Promise<CdpTagCatalogItem> => {
+    if (!cdp) throw new Error('CRM CDP service is unavailable')
+    const matches = (await cdp.tagCatalog(id, 20, signal)).filter(item => item.id === id)
+    if (matches.length !== 1) throw new Error('Selected CDP tag is unavailable')
+    return matches[0]!
+  }
   ctx.effect(() => ctx.tools.register(defineTool({
-    name: 'crm_campaign_plan', description: 'Prepare a no-write campaign preview from one recommendation recorded in the current session.',
-    parameters: { recommendationId: { type: 'string', required: true } }, output: planOutput,
+    name: 'crm_campaign_plan', description: 'Validate live CDP and MA selections and prepare a no-write campaign preview from one current-session recommendation.',
+    parameters: { recommendationId: { type: 'string', required: true }, audienceTagId: { type: 'string', required: true },
+      exclusionTagIds: { type: 'array', items: { type: 'string' }, required: true },
+      groupId: { type: 'string', required: true }, categoryId: { type: 'string', required: true },
+      contentId: { type: 'string', required: true } }, output: planOutput,
     async execute(args, exec) {
       if (!exec.agent) throw new Error('CRM campaign planning requires an agent session')
       const recommendation = findRecommendation(exec.agent.session, args.recommendationId)
-      return json(await createCampaignPlan(marketingModel, recommendation, analyzeOpportunity, exec.signal))
+      if (args.exclusionTagIds.length === 0 || new Set(args.exclusionTagIds).size !== args.exclusionTagIds.length
+        || args.exclusionTagIds.includes(args.audienceTagId)) throw new Error('Invalid CDP tag selection')
+      const [audienceTag, exclusionTags, group, category, content] = await Promise.all([
+        exactCdpTag(args.audienceTagId, exec.signal), Promise.all(args.exclusionTagIds.map(id => exactCdpTag(id, exec.signal))),
+        exactMaItem(args.groupId, 'group', exec.signal), exactMaItem(args.categoryId, 'category', exec.signal),
+        exactMaItem(args.contentId, 'content', exec.signal),
+      ])
+      if (!content.flowNodeId) throw new Error('Selected MA content has no flow node capability')
+      const activation: CampaignActivation = { audienceTag, exclusionTags: Object.freeze(exclusionTags), group, category,
+        content: { ...content, flowNodeId: content.flowNodeId } }
+      return json(await createCampaignPlan(marketingModel, recommendation, activation, analyzeOpportunity, exec.signal))
     },
   })))
   ctx.effect(() => ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
@@ -390,17 +416,11 @@ export function apply(ctx: Context, config: CrmConfig): void {
       const recommendation = findRecommendation(exec.agent.session, plan.recommendationId)
       const policy = audiencePolicies.get(recommendation.opportunityId)
       if (!policy) throw new Error('No governed audience policy is configured')
-      const actionDefinition = canvasConfig.actions.find(item => policy.actionIds.includes(item.id))
-      if (!actionDefinition || actionDefinition.templateId.startsWith('unconfigured_')
-        || actionDefinition.capabilityId.startsWith('unconfigured_')) throw new Error('Campaign action is not configured')
-      if (actionDefinition.kind === 'loyalty_coupon' && !loyalty) throw new Error('CRM LOYALTY service is unavailable')
-      const action: CampaignAction = actionDefinition.kind === 'ma_delivery'
-        ? { kind: 'ma_delivery', templateId: actionDefinition.templateId }
-        : { kind: 'loyalty_coupon', templateId: actionDefinition.templateId, capabilityId: actionDefinition.capabilityId }
-      const audience = buildMaAudience(policy, recommendation, plan.planId, plan.audiencePreview.estimatedCount)
-      const canvas = buildSinglePathCanvas(canvasConfig, plan, action)
+      const audience = buildMaTagAudience(policy, recommendation, plan.planId, plan.activation, plan.audiencePreview.estimatedCount)
+      const canvas = buildCatalogCanvas(canvasConfig, plan)
       const campaign: ResolvedMaCampaign = { id: `campaign_${plan.planId}`, name: `CRM ${recommendation.title}`,
-        groupId: '0', campaignCode: `CRM_${plan.planId}`, category: 'CRM', type: 'AUTOMATION', priority: 5,
+        groupId: plan.activation.group.id, campaignCode: `CRM_${plan.planId}`, category: plan.activation.category.id,
+        type: 'FLOW', priority: 5,
         summary: recommendation.actionTemplate,
         setting: canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, extra: { planId: plan.planId } }
       return json(await createCampaignDraft(exec.agent.session, { ma, tenantId: 'mkt',

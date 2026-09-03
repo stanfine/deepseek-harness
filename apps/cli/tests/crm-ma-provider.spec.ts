@@ -91,13 +91,14 @@ describe('CRM MA HTTP provider', () => {
       const path = request.url ?? ''
       response.end(JSON.stringify(path.includes('campaign-group') ? [{ id: 'adhoc', name: 'AdHoc' }]
         : path.includes('campaign-category') ? [{ id: 'category', name: 'Category' }]
-          : [{ id: 'welcome', name: 'Welcome', enabled: true }, { id: 'off', name: 'Off', enabled: false }]))
+          : [{ id: 'welcome', name: 'Welcome', enabled: true, flowNodeId: 'MESSAGE' },
+            { id: 'off', name: 'Off', enabled: false, flowNodeId: 'MESSAGE' }]))
     })
     const provider = new CrmMaHttpProvider(config(url), {})
     await expect(provider.activationCatalog(undefined, 3, AbortSignal.timeout(500))).resolves.toEqual([
       { id: 'adhoc', name: 'AdHoc', kind: 'group', enabled: true },
       { id: 'category', name: 'Category', kind: 'category', enabled: true },
-      { id: 'welcome', name: 'Welcome', kind: 'content', enabled: true },
+      { id: 'welcome', name: 'Welcome', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' },
     ])
   })
 })

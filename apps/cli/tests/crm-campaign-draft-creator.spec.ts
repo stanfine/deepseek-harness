@@ -6,9 +6,14 @@ import { campaignPlanIdFor } from '../config/examples/crm/campaign-planner.ts'
 
 const audiencePreview = { conditions: [{ kind: 'dimension_value', dimension: 'channel' }], estimatedCount: 42,
   unavailableReasons: [] }
-const plan = { version: 1, planId: campaignPlanIdFor('rec_abc', audiencePreview as never), recommendationId: 'rec_abc',
+const activation = { audienceTag: { id: 'target', code: 'target', name: 'Target', fullName: 'Target' }, exclusionTags: [
+  { id: 'blocked', code: 'blocked', name: 'Blocked', fullName: 'Blocked' },
+], group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
+category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
+content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
+const plan = { version: 1, planId: campaignPlanIdFor('rec_abc', audiencePreview as never, activation as never), recommendationId: 'rec_abc',
   status: 'preview', readyForCreation: true, readinessReasons: [], audiencePreview, actionTemplate: 'Offer',
-  primaryMetrics: ['sales_amount'], guardrailMetrics: ['atv'], limitations: [] }
+  activation, primaryMetrics: ['sales_amount'], guardrailMetrics: ['atv'], limitations: [] }
 const audience = { id: 'aud-plan', name: 'Audience', description: 'Test', selectType: 'CONDITION', usageType: 'CAMPAIGN',
   filter: { all: [] }, setting: { dwhType: 'MA' }, extra: { planId: plan.planId } }
 const campaign = { id: 'campaign-plan', name: 'Campaign', groupId: 'group', campaignCode: 'code', category: 'category',

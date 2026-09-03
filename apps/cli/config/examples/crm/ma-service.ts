@@ -39,7 +39,13 @@ export interface MaCampaignStatus { id: MaCampaignId; status: string; started: b
 /** Aggregate MA reach projection. */
 export interface MaReachSummary { reachPeople: number; channels: readonly { channel: string; count: number }[] }
 /** Read-only MA activation option. */
-export interface MaCatalogItem { id: string; name: string; kind: 'group' | 'category' | 'content'; enabled: boolean }
+export interface MaCatalogItem {
+  id: string
+  name: string
+  kind: 'group' | 'category' | 'content'
+  enabled: boolean
+  flowNodeId?: string
+}
 
 /** MA operations required by governed CRM campaign creation. */
 export interface CrmMaService {

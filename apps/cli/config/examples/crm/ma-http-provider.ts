@@ -174,7 +174,7 @@ export class CrmMaHttpProvider implements CrmMaService {
     const sources = await Promise.all([
       this.request('/campaign-group/list?proj=id,name', 'GET', undefined, signal),
       this.request('/campaign-category/list?proj=id,name', 'GET', undefined, signal),
-      this.request('/flow-content/list?proj=id,name,enabled', 'GET', undefined, signal),
+      this.request('/flow-content/list?proj=id,name,enabled,flowNodeId', 'GET', undefined, signal),
     ])
     const kinds = ['group', 'category', 'content'] as const
     const needle = query?.trim().toLocaleLowerCase()
@@ -183,8 +183,11 @@ export class CrmMaHttpProvider implements CrmMaService {
       if (!Array.isArray(values)) throw new Error('Invalid MA activation catalog')
       return values.map((entry): MaCatalogItem => {
         const item = object(entry)
-        return { id: text(item.id, 'catalog id'), name: text(item.name, 'catalog name'), kind: kinds[index]!,
-          enabled: kinds[index] !== 'content' || item.enabled === true }
+        const kind = kinds[index]!
+        return { id: text(item.id, 'catalog id'), name: text(item.name, 'catalog name'), kind,
+          enabled: kind !== 'content' || item.enabled === true,
+          ...(kind === 'content' && typeof item.flowNodeId === 'string' && item.flowNodeId.trim()
+            ? { flowNodeId: item.flowNodeId } : {}) }
       })
     }).filter(item => !needle || `${item.id} ${item.name}`.toLocaleLowerCase().includes(needle))
     return Object.freeze(rows.slice(0, limit).map(item => Object.freeze(item)))

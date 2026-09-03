@@ -3,6 +3,7 @@ import type { ResolvedMaAudience } from './ma-service.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { MarketingModel } from './marketing-model.ts'
 import type { RecommendationV1 } from './opportunity-evaluator.ts'
+import type { CampaignActivation } from './campaign-planner.ts'
 
 /** Closed audience condition source. */
 export type AudienceSource = 'tag' | 'field'
@@ -91,5 +92,27 @@ export function buildMaAudience(
   return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
     selectType: 'CONDITION', usageType: 'CAMPAIGN',
     filter: Object.freeze({ all: Object.freeze(all.map(item => Object.freeze(item))) }) as unknown as JsonValue,
+    setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })
+}
+
+/** Build an MA audience from CDP tags validated and recorded by campaign planning.
+ * @param policy Governed size and opportunity policy.
+ * @param recommendation Recorded recommendation.
+ * @param planId Current campaign plan identity.
+ * @param activation Validated live-system selection.
+ * @param estimatedSize Optional aggregate estimate.
+ * @returns Immutable resolved MA audience.
+ */
+export function buildMaTagAudience(
+  policy: Readonly<AudiencePolicyDefinition>, recommendation: RecommendationV1, planId: string,
+  activation: CampaignActivation, estimatedSize?: number,
+): ResolvedMaAudience {
+  if (recommendation.opportunityId !== policy.opportunityId) throw new Error('Audience policy opportunity mismatch')
+  if (estimatedSize !== undefined && estimatedSize > policy.maxEstimatedSize) throw new Error('Audience exceeds configured maximum')
+  const all = [{ source: 'tag' as const, key: 'tag', operator: 'equals' as const, values: [activation.audienceTag.id] },
+    ...activation.exclusionTags.map(item => ({ source: 'tag' as const, key: 'tag', operator: 'not_equals' as const,
+      values: [item.id] }))]
+  return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
+    selectType: 'CONDITION', usageType: 'CAMPAIGN', filter: Object.freeze({ all: Object.freeze(all) }) as unknown as JsonValue,
     setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })
 }

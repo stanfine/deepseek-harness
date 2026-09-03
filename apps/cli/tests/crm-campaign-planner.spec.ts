@@ -10,6 +10,11 @@ const definition = { id: 'channel_decline', title: 'Optimize channel', dataset: 
   audienceConditions: [{ kind: 'dimension_value', dimension: 'channel' }], limitations: ['Aggregate evidence only.'] }
 
 const model = { opportunityCatalog: () => [{ ...definition, available: true }], resolveOpportunity: () => definition }
+const activation = { audienceTag: { id: 'target', code: 'target', name: 'Target', fullName: 'Target' }, exclusionTags: [
+  { id: 'blocked', code: 'blocked', name: 'Blocked', fullName: 'Blocked' },
+], group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
+category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
+content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
 
 function evidence(metrics = { sales_amount: { value: 70, comparisonValue: 100, changeRatio: -0.3 },
   atv: { value: 7, comparisonValue: 10, changeRatio: -0.3 } }) {
@@ -62,7 +67,7 @@ describe('CRM campaign planner', () => {
   it('creates a deterministic preview with an aggregate audience estimate', async () => {
     const item = await recommendation()
     let request: unknown
-    const plan = await createCampaignPlan(model as never, item, async (value) => {
+    const plan = await createCampaignPlan(model as never, item, activation as never, async (value) => {
       request = value
       return { ...evidence(), request: value, rows: [{ dimensions: {}, metrics: { purchaser_count: { value: 42 } } }] } as never
     }, AbortSignal.timeout(100))
@@ -77,7 +82,7 @@ describe('CRM campaign planner', () => {
   it('marks a plan unavailable when no governed audience condition exists', async () => {
     const item = await recommendation()
     const plan = await createCampaignPlan({ ...model, resolveOpportunity: () => ({ ...definition, audienceConditions: [] }) } as never,
-      item, () => { throw new Error('must not analyze') }, AbortSignal.timeout(100))
+      item, activation as never, () => { throw new Error('must not analyze') }, AbortSignal.timeout(100))
     expect(plan.readyForCreation).toBe(false)
     expect(plan.readinessReasons).toContain('No governed audience condition is configured')
   })
