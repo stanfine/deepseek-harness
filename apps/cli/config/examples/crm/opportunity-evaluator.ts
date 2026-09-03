@@ -106,7 +106,15 @@ function evidence(result: SemanticAnalysisResultV1): RecommendationEvidence {
     completeness: result.completeness, warnings: result.warnings })
 }
 
-function recommendationId(opportunityId: string, request: OpportunityRequest, records: readonly RecommendationEvidence[]): string {
+/** Recompute the opaque identity used to detect altered persisted recommendations.
+ * @param opportunityId Governed opportunity identity.
+ * @param request Normalized recommendation request.
+ * @param records Persisted aggregate evidence.
+ * @returns Stable opaque recommendation identity.
+ */
+export function recommendationIdFor(
+  opportunityId: string, request: OpportunityRequest, records: readonly RecommendationEvidence[],
+): string {
   return `rec_${createHash('sha256').update(JSON.stringify({ version: 1, opportunityId, request, evidence: records })).digest('base64url')}`
 }
 
@@ -146,7 +154,7 @@ export async function evaluateOpportunities(
     if (strength <= 0) continue
     const records = Object.freeze([evidence(result)])
     const score = Math.round(strength * definition.impactWeight * (1 - definition.riskWeight) * 1000) / 1000
-    candidates.push(Object.freeze({ recommendationId: recommendationId(definition.id, request, records), opportunityId: definition.id,
+    candidates.push(Object.freeze({ recommendationId: recommendationIdFor(definition.id, request, records), opportunityId: definition.id,
       score, title: definition.title, actionTemplate: definition.actionTemplate, evidence: records,
       primaryMetrics: Object.freeze([...definition.primaryMetrics]), guardrailMetrics: Object.freeze([...definition.guardrailMetrics]),
       limitations: Object.freeze([...definition.limitations]) }))
