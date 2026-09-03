@@ -10,7 +10,7 @@ describe('CRM Excel Host', () => {
     const ctx = new Context()
     let route: { fetch(request: Request): Promise<Response> } | undefined
     const disposeRoute = vi.fn()
-    const register = vi.fn((value) => { route = value; return disposeRoute })
+    const register = vi.fn((value: { fetch(request: Request): Promise<Response> }) => { route = value; return disposeRoute })
     ctx.provide('connection', { fetch: { register } } as never)
     const root = await mkdtemp(join(tmpdir(), 'dsh-crm-host-'))
     try {

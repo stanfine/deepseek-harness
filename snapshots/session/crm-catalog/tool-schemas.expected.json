@@ -66,6 +66,19 @@
       }
     },
     {
+      "name": "crm_activation_catalog",
+      "description": "Search live read-only MA groups, categories and content plus CDP audience tags before preparing a campaign plan.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Optional catalog name or code fragment."
+          }
+        }
+      }
+    },
+    {
       "name": "crm_analyze",
       "description": "Calculate bounded CRM aggregates from configured business metrics and dimensions.",
       "parameters": {

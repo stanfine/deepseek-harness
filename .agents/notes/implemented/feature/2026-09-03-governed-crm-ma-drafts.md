@@ -16,6 +16,8 @@ The CRM example uses a recommendation-first workflow. Deterministic evaluators t
 
 Campaign status and result tools resolve external ids from the current session. Result collection keeps MA and LOYALTY aggregate availability independent and does not expose customers or infer a cross-system join. Conversion and incrementality report explicit unavailability until deployment-owned attribution and holdout rules exist. Client cards validate persisted metadata and reject active drafts, executable fields, and customer-bearing results.
 
+`crm_activation_catalog` reads bounded safe projections from the configured MA and CDP systems. The Agent uses this catalog before planning so external group, category, content, and tag ids come from the deployment rather than source constants or model invention. Catalog reads never return tag conditions or customer records.
+
 ## Alternatives considered
 
 - **Let the model generate MA JSON and canvas options** — this moves customer selection and execution behavior outside deployment review.

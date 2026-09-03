@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import z from '@deepseek-ai/schemastery'
 import type { CrmMaService, MaAudienceId, MaAudienceRef, MaCampaignId, MaCampaignRef, MaCampaignStatus,
-  MaReachSummary, ResolvedMaAudience, ResolvedMaCampaign } from './ma-service.ts'
+  MaCatalogItem, MaReachSummary, ResolvedMaAudience, ResolvedMaCampaign } from './ma-service.ts'
 import { compileMaAudience } from './ma-wire.ts'
 
 /** Explicit transport and deployment settings for MA. */
@@ -168,6 +168,26 @@ export class CrmMaHttpProvider implements CrmMaService {
       throw new Error('Invalid MA reach summary')
     }
     return { reachPeople: value.reachPeople as number, channels: Object.freeze([]) }
+  }
+
+  async activationCatalog(query: string | undefined, limit: number, signal: AbortSignal): Promise<readonly MaCatalogItem[]> {
+    const sources = await Promise.all([
+      this.request('/campaign-group/list?proj=id,name', 'GET', undefined, signal),
+      this.request('/campaign-category/list?proj=id,name', 'GET', undefined, signal),
+      this.request('/flow-content/list?proj=id,name,enabled', 'GET', undefined, signal),
+    ])
+    const kinds = ['group', 'category', 'content'] as const
+    const needle = query?.trim().toLocaleLowerCase()
+    const rows = sources.flatMap((source, index) => {
+      const values = Array.isArray(source) ? source : object(source).data
+      if (!Array.isArray(values)) throw new Error('Invalid MA activation catalog')
+      return values.map((entry): MaCatalogItem => {
+        const item = object(entry)
+        return { id: text(item.id, 'catalog id'), name: text(item.name, 'catalog name'), kind: kinds[index]!,
+          enabled: kinds[index] !== 'content' || item.enabled === true }
+      })
+    }).filter(item => !needle || `${item.id} ${item.name}`.toLocaleLowerCase().includes(needle))
+    return Object.freeze(rows.slice(0, limit).map(item => Object.freeze(item)))
   }
 }
 

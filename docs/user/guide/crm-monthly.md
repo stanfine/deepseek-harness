@@ -24,6 +24,9 @@ export DSH_CRM_LOYALTY_ALLOW_HTTP=true
 export DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED=true
 export DSH_CRM_MA_DELIVERY_TEMPLATE_ID='deployment-approved-template'
 export DSH_CRM_MA_DELIVERY_CAPABILITY_ID='deployment-approved-capability'
+export DSH_CRM_CDP_URL='http://your-cdp-host:12000'
+export DSH_CRM_CDP_ALLOW_HTTP=true
+export DSH_CRM_CDP_ALLOW_UNAUTHENTICATED=true
 pnpm dsh web --patch apps/cli/config/examples/crm/cordis.yml
 ```
 
@@ -31,7 +34,7 @@ HTTP Basic authentication does not encrypt credentials or records. Use this opti
 
 ## Create a governed marketing draft
 
-Ask: `分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` The Agent evaluates governed opportunities from aggregate CRM evidence and returns up to three ranked suggestions. Ask it to prepare a campaign plan for one recommendation. The plan contains an aggregate audience estimate, configured action, validation metrics, limitations, and readiness reasons; it performs no write.
+Ask: `分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` The Agent evaluates governed opportunities from aggregate CRM evidence and returns up to three ranked suggestions. It calls `crm_activation_catalog` to search the current MA groups, categories and content plus active CDP tags instead of inventing external ids. Ask it to prepare a campaign plan for one recommendation. The plan contains an aggregate audience estimate, configured action, validation metrics, limitations, and readiness reasons; it performs no write.
 
 After reviewing the plan, explicitly ask to create its inactive draft. The write tool accepts only the recorded `planId` and fixed `create_inactive_draft` token, then triggers host approval. Audience conditions, exclusions, MA nodes, connectors, templates, capabilities, and provider bodies come from deployment configuration. The provider compiles those values into MA `AudienceInfo` and X6 `flowData`, validates the flow, and never invokes MA pre-execution. Approval creates only one audience and one `DRAFT` or `INACTIVE` campaign. The workflow cannot approve, start, send, issue coupons, edit, or delete. Session events and a deterministic business key make retries replay-safe or require manual reconciliation after an ambiguous result.
 

@@ -85,4 +85,19 @@ describe('CRM MA HTTP provider', () => {
     await expect(new CrmMaHttpProvider(config(hanging), {}).campaignStatus('campaign-1' as never, AbortSignal.timeout(500)))
       .rejects.toThrow(/cancelled or timed out/)
   })
+
+  it('reads bounded MA activation catalogs from system capabilities', async () => {
+    const url = await endpoint((request, response) => {
+      const path = request.url ?? ''
+      response.end(JSON.stringify(path.includes('campaign-group') ? [{ id: 'adhoc', name: 'AdHoc' }]
+        : path.includes('campaign-category') ? [{ id: 'category', name: 'Category' }]
+          : [{ id: 'welcome', name: 'Welcome', enabled: true }, { id: 'off', name: 'Off', enabled: false }]))
+    })
+    const provider = new CrmMaHttpProvider(config(url), {})
+    await expect(provider.activationCatalog(undefined, 3, AbortSignal.timeout(500))).resolves.toEqual([
+      { id: 'adhoc', name: 'AdHoc', kind: 'group', enabled: true },
+      { id: 'category', name: 'Category', kind: 'category', enabled: true },
+      { id: 'welcome', name: 'Welcome', kind: 'content', enabled: true },
+    ])
+  })
 })

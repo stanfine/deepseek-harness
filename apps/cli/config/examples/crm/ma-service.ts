@@ -38,6 +38,8 @@ export interface MaCampaignRef { id: MaCampaignId; name: string; status: string 
 export interface MaCampaignStatus { id: MaCampaignId; status: string; started: boolean; archived: boolean }
 /** Aggregate MA reach projection. */
 export interface MaReachSummary { reachPeople: number; channels: readonly { channel: string; count: number }[] }
+/** Read-only MA activation option. */
+export interface MaCatalogItem { id: string; name: string; kind: 'group' | 'category' | 'content'; enabled: boolean }
 
 /** MA operations required by governed CRM campaign creation. */
 export interface CrmMaService {
@@ -49,6 +51,7 @@ export interface CrmMaService {
   findCampaignByBusinessKey(key: string, signal: AbortSignal): Promise<MaCampaignRef | undefined>
   campaignStatus(id: MaCampaignId, signal: AbortSignal): Promise<MaCampaignStatus>
   reachSummary(id: MaCampaignId, start: string, end: string, signal: AbortSignal): Promise<MaReachSummary>
+  activationCatalog(query: string | undefined, limit: number, signal: AbortSignal): Promise<readonly MaCatalogItem[]>
 }
 
 declare module '@deepseek-ai/cordis' {

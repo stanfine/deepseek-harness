@@ -77,7 +77,7 @@ it('uses the Agent chart request and routes a chart-mark click to a reviewed dra
   const setDraft = vi.fn()
   p.inputActions.setDraft = setDraft
   render(<CrmRow {...p} />)
-  expect((screen.getByLabelText('图表类型') as HTMLSelectElement).value).toBe('horizontal-bar')
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: '图表类型' }).value).toBe('horizontal-bar')
   const engine = getInstanceByDom(screen.getByRole('img', { name: '分组对比' }))
   act(() => { engine?.trigger('click', { componentType: 'series', dataIndex: 0 } as never) })
   expect(setDraft).toHaveBeenCalledWith(expect.stringContaining('"value":"pos"'))

@@ -14,6 +14,7 @@ import { collectCampaignResults, findRecordedCampaign } from './campaign-results
 import { evaluateOpportunities } from './opportunity-evaluator.ts'
 import type { CrmMaService, ResolvedMaCampaign } from './ma-service.ts'
 import type { CrmLoyaltyService } from './loyalty-service.ts'
+import type { CrmCdpService } from './cdp-service.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
@@ -203,6 +204,7 @@ export function apply(ctx: Context, config: CrmConfig): void {
   const weekly = new WeeklyReportReader(weeklyConfig(config), (dataset, body, signal) => reader.searchConfigured(dataset, body, signal))
   let excelExports: CrmExcelExports | undefined
   let ma: CrmMaService | undefined
+  let cdp: CrmCdpService | undefined
   let loyalty: CrmLoyaltyService | undefined
   ctx.inject(['crmExcelExports'], (exportCtx) => {
     excelExports = Reflect.get(exportCtx, 'crmExcelExports') as CrmExcelExports
@@ -211,6 +213,10 @@ export function apply(ctx: Context, config: CrmConfig): void {
   ctx.inject(['crmMa'], (serviceCtx) => {
     ma = serviceCtx.crmMa
     serviceCtx.effect(() => () => { ma = undefined })
+  })
+  ctx.inject(['crmCdp'], (serviceCtx) => {
+    cdp = serviceCtx.crmCdp
+    serviceCtx.effect(() => () => { cdp = undefined })
   })
   ctx.inject(['crmLoyalty'], (serviceCtx) => {
     loyalty = serviceCtx.crmLoyalty
@@ -316,6 +322,24 @@ export function apply(ctx: Context, config: CrmConfig): void {
     parameters: {}, output,
     async execute() { return json(marketingModel.opportunityCatalog().map(item => ({ ...item,
       activationAvailable: audiencePolicies.has(item.id) }))) },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_activation_catalog', description: 'Search live read-only MA groups, categories and content plus CDP audience tags before preparing a campaign plan.',
+    parameters: { query: { type: 'string', description: 'Optional catalog name or code fragment.' } }, output,
+    async execute(args, exec) {
+      if (!ma && !cdp) throw new Error('CRM activation catalogs are unavailable')
+      const query = args.query?.trim()
+      if (query && query.length > config.semantic.maxInputChars) throw new Error('Activation catalog query is too long')
+      const [maResult, cdpResult] = await Promise.allSettled([
+        ma?.activationCatalog(query, 20, exec.signal) ?? Promise.reject(new Error('MA unavailable')),
+        cdp?.tagCatalog(query, 20, exec.signal) ?? Promise.reject(new Error('CDP unavailable')),
+      ])
+      return json({ version: 1, query: query ?? null,
+        ma: maResult.status === 'fulfilled' ? { available: true, items: maResult.value }
+          : { available: false, reason: 'MA activation catalog unavailable', items: [] },
+        cdp: cdpResult.status === 'fulfilled' ? { available: true, items: cdpResult.value }
+          : { available: false, reason: 'CDP tag catalog unavailable', items: [] } })
+    },
   })))
   const recommendationOutput = {
     ...output,

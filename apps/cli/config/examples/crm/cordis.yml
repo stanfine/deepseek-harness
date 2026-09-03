@@ -29,6 +29,18 @@
         passwordEnv: DSH_CRM_MA_PASSWORD
         timeoutMs: 30000
         maxResponseBytes: 1048576
+    - id: crm-cdp-provider
+      name: ./cdp-http-provider.ts
+      disabled: !!js process.env.DSH_CRM_CDP_URL === undefined
+      config:
+        endpoint: !!js process.env.DSH_CRM_CDP_URL
+        allowHttp: !!js process.env.DSH_CRM_CDP_ALLOW_HTTP === 'true'
+        allowUnauthenticated: !!js process.env.DSH_CRM_CDP_ALLOW_UNAUTHENTICATED === 'true'
+        collectionId: mkt_catering_loyalty
+        usernameEnv: DSH_CRM_CDP_USERNAME
+        passwordEnv: DSH_CRM_CDP_PASSWORD
+        timeoutMs: 30000
+        maxResponseBytes: 4194304
     - id: crm-loyalty-provider
       name: ./loyalty-http-provider.ts
       config:

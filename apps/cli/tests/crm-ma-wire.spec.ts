@@ -21,13 +21,12 @@ describe('CRM MA wire compiler', () => {
       { id: 'e1', source: 'start', target: 'audience', connectorId: 'sequence' },
       { id: 'e2', source: 'audience', target: 'delivery', connectorId: 'sequence' },
       { id: 'e3', source: 'delivery', target: 'end', connectorId: 'sequence' },
-    ] } as never, 'aud-1' as never)
-    expect(flow).toEqual(expect.arrayContaining([
-      expect.objectContaining({ shape: 'AudienceNode', data: expect.objectContaining({ audienceId: 'aud-1' }) }),
-      expect.objectContaining({ shape: 'FlowContentNode', data: expect.objectContaining({ flowContentId: 'welcome', configId: 'sms' }) }),
-    ]))
+    ] }, 'aud-1' as never)
+    const items = flow as unknown as { shape?: string; data?: Record<string, unknown> }[]
+    expect(items.find(item => item.shape === 'AudienceNode')?.data).toMatchObject({ audienceId: 'aud-1' })
+    expect(items.find(item => item.shape === 'FlowContentNode')?.data).toMatchObject({ flowContentId: 'welcome', configId: 'sms' })
     const setting = compileMaCampaignSetting(flow) as { type: string; flowData: string }
     expect(setting.type).toBe('FLOW')
-    expect(JSON.parse(setting.flowData)).toEqual(flow)
+    expect(JSON.parse(setting.flowData) as unknown).toEqual(flow)
   })
 })

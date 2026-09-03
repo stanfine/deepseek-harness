@@ -120,7 +120,7 @@ function excelDownloadUrl(value: unknown, id: string): boolean {
   if (typeof value !== 'string') return false
   try {
     const url = new URL(value)
-    return (typeof globalThis.location?.origin !== 'string' || url.origin === globalThis.location.origin)
+    return (!('location' in globalThis) || url.origin === globalThis.location.origin)
       && ['http:', 'https:'].includes(url.protocol) && url.pathname === '/api/crm.export'
       && url.search === `?id=${encodeURIComponent(id)}` && !url.hash
   } catch { return false }

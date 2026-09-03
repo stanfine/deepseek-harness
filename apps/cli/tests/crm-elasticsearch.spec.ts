@@ -166,7 +166,7 @@ describe('CRM Elasticsearch reader', () => {
       const plugin = ctx.plugin(CrmTools, { ...config, endpoint })
       await plugin
       expect(ctx.tools.schemas().map(tool => tool.name)).toEqual([
-        'crm_catalog', 'crm_profile', 'crm_query', 'crm_metric_catalog', 'crm_opportunity_catalog',
+        'crm_catalog', 'crm_profile', 'crm_query', 'crm_metric_catalog', 'crm_opportunity_catalog', 'crm_activation_catalog',
         'crm_recommend_opportunities', 'crm_campaign_plan', 'crm_campaign_create_draft', 'crm_campaign_status',
         'crm_campaign_results', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown',
         'crm_report_periods', 'crm_sales_report', 'crm_lifecycle_report', 'crm_product_report', 'crm_export_weekly_excel',

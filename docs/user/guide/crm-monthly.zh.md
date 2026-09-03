@@ -24,6 +24,9 @@ export DSH_CRM_LOYALTY_ALLOW_HTTP=true
 export DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED=true
 export DSH_CRM_MA_DELIVERY_TEMPLATE_ID='deployment-approved-template'
 export DSH_CRM_MA_DELIVERY_CAPABILITY_ID='deployment-approved-capability'
+export DSH_CRM_CDP_URL='http://your-cdp-host:12000'
+export DSH_CRM_CDP_ALLOW_HTTP=true
+export DSH_CRM_CDP_ALLOW_UNAUTHENTICATED=true
 pnpm dsh web --patch apps/cli/config/examples/crm/cordis.yml
 ```
 
@@ -31,7 +34,7 @@ HTTP Basic 认证不会加密凭据或数据。仅在可信测试网络中开启
 
 ## 创建受治理的营销草稿
 
-输入：`分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` Agent 从 CRM 汇总证据评估受治理的机会，并返回最多三条排序建议。然后要求它为其中一条建议准备活动计划。计划包含汇总人群估算、配置动作、验证指标、限制和就绪原因，不执行写入。
+输入：`分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` Agent 从 CRM 汇总证据评估受治理的机会，并返回最多三条排序建议。它会调用 `crm_activation_catalog` 查询当前 MA 的分组、分类、内容以及有效 CDP 标签，不自行编造外部 id。然后要求它为其中一条建议准备活动计划。计划包含汇总人群估算、配置动作、验证指标、限制和就绪原因，不执行写入。
 
 审阅计划后，明确要求创建对应的未启动草稿。写工具只接受已记录的 `planId` 和固定确认词 `create_inactive_draft`，随后触发宿主审批。人群条件、排除规则、MA 节点、连接器、模板、能力和提供方请求体均来自部署配置。提供方会将这些值编译为 MA `AudienceInfo` 和 X6 `flowData`，校验流程，并且不会调用 MA 预执行。批准后只创建一个人群和一个 `DRAFT` 或 `INACTIVE` 活动。工作流不能审批活动、启动、发送、发券、编辑或删除。会话事件和确定性业务键使重试能够安全复用；远端结果不明确且无法查询时要求人工对账。
 
