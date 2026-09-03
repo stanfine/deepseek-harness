@@ -254,6 +254,7 @@
           riskWeight: 0.2
           actionTemplate: 复核下降渠道的商品、客单价与触达策略，形成小范围人工验证方案。
           audienceConditions: [{ kind: dimension_value, dimension: channel }]
+          audiencePolicyId: channel_policy
           limitations: [仅使用汇总订单证据，不代表活动归因或可触达客户。]
         - id: store_improvement
           title: 改善低效门店
@@ -317,6 +318,30 @@
           audienceConditions: [{ kind: member_segment, segment: recent_buyer }]
           requiredConcepts: [recency, consent, spend, identity]
           limitations: [当前配置缺少复购定义、触达同意、消费分层与稳定身份映射。]
+    activation:
+      policies:
+        - id: channel_policy
+          opportunityId: channel_optimization
+          source: tag
+          key: preferred_channel
+          operator: in
+          evidenceDimension: channel
+          valueMap: { 门店: STORE, 线上: ONLINE, 小程序: MINI_PROGRAM }
+          mandatoryExclusions: [{ source: tag, key: marketing_consent, operator: equals, value: 'false' }]
+          maxEstimatedSize: 100000
+          actionIds: [sms_offer]
+      canvas:
+        nodeTypes: { entry: AUDIENCE_ENTRY, condition: CONDITION, action: ACTION, end: END }
+        connectorId: sequence
+        actions:
+          - id: sms_offer
+            kind: ma_delivery
+            templateId: !!js process.env.DSH_CRM_MA_DELIVERY_TEMPLATE_ID || 'unconfigured_sms_template'
+            capabilityId: !!js process.env.DSH_CRM_MA_DELIVERY_CAPABILITY_ID || 'unconfigured_sms_capability'
+          - id: welcome_coupon
+            kind: loyalty_coupon
+            templateId: !!js process.env.DSH_CRM_LOYALTY_COUPON_TEMPLATE_ID || 'unconfigured_coupon_template'
+            capabilityId: !!js process.env.DSH_CRM_MA_BENEFIT_CAPABILITY_ID || 'unconfigured_benefit_capability'
     report:
       fiscalYearStartMonth: 4
       orderFactsDataset: order_facts

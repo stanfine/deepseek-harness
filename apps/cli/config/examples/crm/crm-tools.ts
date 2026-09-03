@@ -6,6 +6,8 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
 import { resolveMarketingModel, type MarketingConfig } from './marketing-model.ts'
+import { resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
+import { resolveCanvasConfig, type CanvasConfig } from './campaign-canvas.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
@@ -55,8 +57,19 @@ export const Config = z.object({
     audienceConditions: z.array(z.object({
       kind: z.string().required(), dimension: z.string(), segment: z.string(),
     })).required(),
-    requiredConcepts: z.array(z.string()), limitations: z.array(z.string()).required(),
+    audiencePolicyId: z.string(), requiredConcepts: z.array(z.string()), limitations: z.array(z.string()).required(),
   })).required() }).required(),
+  activation: z.object({
+    policies: z.array(z.object({ id: z.string().required(), opportunityId: z.string().required(), source: z.string().required(),
+      key: z.string().required(), operator: z.string().required(), evidenceDimension: z.string().required(),
+      valueMap: z.dict(z.string()).required(), mandatoryExclusions: z.array(z.object({ source: z.string().required(),
+        key: z.string().required(), operator: z.string().required(), value: z.string().required() })).required(),
+      maxEstimatedSize: z.number().required(), actionIds: z.array(z.string()).required() })).required(),
+    canvas: z.object({ nodeTypes: z.object({ entry: z.string().required(), condition: z.string().required(),
+      action: z.string().required(), end: z.string().required() }).required(), connectorId: z.string().required(),
+    actions: z.array(z.object({ id: z.string().required(), kind: z.string().required(), templateId: z.string().required(),
+      capabilityId: z.string().required() })).required() }).required(),
+  }).required(),
   report: z.object({
     fiscalYearStartMonth: z.number().required(), orderFactsDataset: z.string().required(), orderItemsDataset: z.string().required(),
     lifecycleHistoryCompleteFrom: z.string(), weeklyMultipleOrdersAreRepeatPurchasers: z.boolean().required(),
@@ -79,7 +92,12 @@ function downloadBaseUrl(value: string): string {
   return url.origin
 }
 
-type CrmConfig = ReaderConfig & { excel: ExcelConfig; semantic: SemanticConfig; marketing: MarketingConfig }
+type CrmConfig = ReaderConfig & {
+  excel: ExcelConfig
+  semantic: SemanticConfig
+  marketing: MarketingConfig
+  activation: AudiencePolicyConfig & { canvas: CanvasConfig }
+}
 
 function recommendations(value: unknown, config: ExcelConfig): WorkbookRecommendation[] {
   if (value === undefined) return []
@@ -162,7 +180,9 @@ export function apply(ctx: Context, config: CrmConfig): void {
   }
   const exportBaseUrl = downloadBaseUrl(config.excel.downloadBaseUrl)
   const semanticModel = resolveSemanticModel(config.semantic, config.datasets)
-  resolveMarketingModel(config.marketing, semanticModel)
+  const marketingModel = resolveMarketingModel(config.marketing, semanticModel)
+  resolveAudiencePolicy({ policies: config.activation.policies }, marketingModel)
+  resolveCanvasConfig(config.activation.canvas)
   const reader = new ElasticsearchReader(resolveConfig(config, process.env))
   const weekly = new WeeklyReportReader(weeklyConfig(config), (dataset, body, signal) => reader.searchConfigured(dataset, body, signal))
   let excelExports: CrmExcelExports | undefined
