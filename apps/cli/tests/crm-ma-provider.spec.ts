@@ -25,7 +25,8 @@ describe('CRM MA HTTP provider', () => {
       const chunks: Buffer[] = []
       request.on('data', (chunk: Buffer) => chunks.push(chunk))
       request.on('end', () => {
-        calls.push({ method: request.method, url: request.url, body: Buffer.concat(chunks).toString() })
+        calls.push({ ...(request.method === undefined ? {} : { method: request.method }),
+          ...(request.url === undefined ? {} : { url: request.url }), body: Buffer.concat(chunks).toString() })
         response.setHeader('content-type', 'application/json')
         response.end(calls.length === 1 ? '42' : JSON.stringify({ id: 'aud-1', name: 'Test audience' }))
       })
@@ -49,6 +50,23 @@ describe('CRM MA HTTP provider', () => {
     expect(() => resolveMaConfig({ endpoint: 'https://example.test', allowHttp: false, allowUnauthenticated: false,
       tenantId: 'mkt', buCode: 'catering', usernameEnv: 'U', passwordEnv: 'P', timeoutMs: 10, maxResponseBytes: 10 }, {}))
       .toThrow(/credentials/i)
+  })
+
+  it('reconciles by bounded catalog projections and filters business keys locally', async () => {
+    const paths: string[] = []
+    const url = await endpoint((request, response) => {
+      paths.push(request.url ?? '')
+      response.end(JSON.stringify(request.url?.includes('/audience/')
+        ? [{ id: 'aud-1', name: 'Audience', extra: { businessKey: 'key-1' } }]
+        : [{ id: 'campaign-1', name: 'Campaign', status: 'DRAFT', extra: { businessKey: 'key-1' } }]))
+    })
+    const provider = new CrmMaHttpProvider(config(url), {})
+    await expect(provider.findAudienceByBusinessKey('key-1', AbortSignal.timeout(500)))
+      .resolves.toMatchObject({ id: 'aud-1' })
+    await expect(provider.findCampaignByBusinessKey('key-1', AbortSignal.timeout(500)))
+      .resolves.toMatchObject({ id: 'campaign-1', status: 'DRAFT' })
+    expect(paths).toEqual(['/api/ma-manage/mkt/catering/audience/list?proj=id,name,extra',
+      '/api/ma-manage/mkt/catering/campaign/list?proj=id,name,status,extra'])
   })
 
   it('redacts remote bodies and enforces response and timeout limits', async () => {

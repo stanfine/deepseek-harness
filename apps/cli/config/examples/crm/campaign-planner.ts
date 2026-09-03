@@ -110,6 +110,7 @@ async function createPlan(
     reasons.push('Member audience concepts are unavailable')
   } else {
     const condition = definition.audienceConditions[0]!
+    if (condition.kind !== 'dimension_value') throw new Error('Unsupported audience condition')
     const values = triggeringValues(definition, recommendation.evidence[0]!)
     if (values.length === 0) reasons.push('No governed audience values were supported by the evidence')
     else {

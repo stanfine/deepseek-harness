@@ -190,6 +190,81 @@
       }
     },
     {
+      "name": "crm_campaign_create_draft",
+      "description": "Create the reviewed MA audience and inactive campaign draft. Requires the exact confirmation token and host approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "confirmation": {
+            "type": "string",
+            "enum": [
+              "create_inactive_draft"
+            ]
+          }
+        },
+        "required": [
+          "planId",
+          "confirmation"
+        ]
+      }
+    },
+    {
+      "name": "crm_campaign_plan",
+      "description": "Prepare a no-write campaign preview from one recommendation recorded in the current session.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recommendationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recommendationId"
+        ]
+      }
+    },
+    {
+      "name": "crm_campaign_results",
+      "description": "Collect partial-safe aggregate MA and configured LOYALTY results for a current-session campaign plan.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId",
+          "start",
+          "end"
+        ]
+      }
+    },
+    {
+      "name": "crm_campaign_status",
+      "description": "Read aggregate lifecycle status for an MA campaign.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId"
+        ]
+      }
+    },
+    {
       "name": "crm_catalog",
       "description": "List CRM logical datasets, dimensions, semantics and query limits. No credentials or raw records.",
       "parameters": {
@@ -433,6 +508,14 @@
       }
     },
     {
+      "name": "crm_opportunity_catalog",
+      "description": "List governed CRM marketing opportunities, evidence requirements, limitations and activation availability.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
       "name": "crm_product_report",
       "description": "Calculate bounded weekly product-series or SKU rankings with previous-week and prior-year comparisons and disclosed truncation.",
       "parameters": {
@@ -565,6 +648,39 @@
           "mode",
           "start",
           "end"
+        ]
+      }
+    },
+    {
+      "name": "crm_recommend_opportunities",
+      "description": "Evaluate configured marketing opportunities from bounded aggregate CRM evidence and return up to three ranked recommendations.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "previous_period",
+              "prior_year"
+            ]
+          },
+          "opportunityIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "comparison"
         ]
       }
     },

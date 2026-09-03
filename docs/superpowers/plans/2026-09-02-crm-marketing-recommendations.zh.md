@@ -36,7 +36,7 @@
 
 - [ ] **步骤 1：编写失败的配置测试。** 添加接受 6 个已配置 id 的 fixture（测试前置数据），并拒绝重复 id、未知指标或维度、跨数据集依赖、不支持的比较、未知人群条件、超出范围的阈值、空规则，以及缺少必需的最近购买、同意状态、消费额或身份概念的可执行成员机会。
 
-```ts
+```text
 expect(() => resolveMarketingModel({ opportunities: [valid, { ...valid }] }, semanticModel)).toThrow(/Duplicate opportunity id/)
 expect(resolveMarketingModel(config, semanticModel).opportunityCatalog().find(item => item.id === 'reactivation'))
   .toMatchObject({ available: false, unavailableReason: expect.stringContaining('recency') })
@@ -46,7 +46,7 @@ expect(resolveMarketingModel(config, semanticModel).opportunityCatalog().find(it
 
 - [ ] **步骤 3：实现不可变的封闭模型。** 定义 `decline`、`growth`、`above_average` 和 `below_average` 等带判别的规则类型；要求每种类型使用精确键；验证有限且有界的阈值和单数据集依赖；将不支持的成员机会解析为不可用，并保留其条目。
 
-```ts
+```text
 export interface MarketingModel {
   opportunityCatalog(): readonly OpportunityCatalogItem[]
   resolveOpportunity(id: string): OpportunityDefinition
@@ -73,7 +73,7 @@ export function resolveMarketingModel(config: MarketingConfig, semantic: Semanti
 
 - [ ] **步骤 1：编写失败的评估器测试。** 覆盖封闭请求验证、固定请求展开、不可用类型、不完整覆盖、规则阈值、确定性分数、稳定顺序、按机会 id 处理并列、最多 3 条结果、保留源请求，以及不存在提供方字段或客户值。
 
-```ts
+```text
 const result = await evaluateOpportunities(model, request, analyzeFixture, signal)
 expect(result.recommendations).toHaveLength(3)
 expect(result.recommendations.map(item => item.score)).toEqual([...result.recommendations.map(item => item.score)].sort((a, b) => b - a))
@@ -84,7 +84,7 @@ expect(JSON.stringify(result)).not.toMatch(/index|field|customerId|dsl|script/)
 
 - [ ] **步骤 3：实现固定分析展开和证据提取。** 只根据已解析的定义构造请求。复用现有规划器和执行器回调，要求已配置的比较覆盖，并将逻辑指标值、覆盖率、完整性、警告和规范化请求复制到有界证据记录中。
 
-```ts
+```text
 export interface OpportunityRequest {
   start: string
   end: string
@@ -154,7 +154,7 @@ export function evaluateOpportunities(
 
 - [ ] **步骤 1：编写失败的会话解析测试。** 构建真实的工具调用和工具结果会话事件。接受一个有效的当前会话 id，并拒绝缺失 id、跨会话 id、格式错误的元数据、冲突的重复 id、超大元数据，以及摘要与其证据不匹配的 id。
 
-```ts
+```text
 expect(findRecommendation(session, validId).recommendationId).toBe(validId)
 expect(() => findRecommendation(otherSession, validId)).toThrow(/current session/)
 ```
@@ -167,7 +167,7 @@ expect(() => findRecommendation(otherSession, validId)).toThrow(/current session
 
 - [ ] **步骤 5：实现聚合人群预览。** 只将已配置的人群条件展开为语义请求，返回计数和有界分布；当任何必需条件或估算不可用时，将 `readyForHumanExecution: false`。
 
-```ts
+```text
 export interface CampaignPlanResultV1 {
   version: 1
   recommendationId: string
@@ -198,7 +198,7 @@ export interface CampaignPlanResultV1 {
 
 - [ ] **步骤 3：实现工具注册。** 在活动方案编排入口获取 `exec.agent.session`，明确保留会话所有权，复用语义执行器回调，并采用部署限制和 1 MiB 保留结果预算中较小者。
 
-```ts
+```text
 async execute(args, exec) {
   const recommendation = findRecommendation(exec.agent.session, args.recommendationId)
   return json(await createCampaignPlan(marketingModel, recommendation, analyze, exec.signal))
@@ -214,8 +214,8 @@ async execute(args, exec) {
 ### 任务 5：已持久化建议和方案验证
 
 **文件：**
-- Create：`packages/client/ui-crm/src/client/marketing-model.ts`
-- Create：`packages/client/ui-crm/tests/crm-marketing-model.client.spec.ts`
+- Create：`packages/client/ui-crm/src/client/campaign-model.ts`
+- Create：`packages/client/ui-crm/tests/crm-campaign-model.client.spec.ts`
 - Modify：`packages/client/ui-crm/src/client/locales.ts`
 
 **接口：**
@@ -224,7 +224,7 @@ async execute(args, exec) {
 
 - [ ] **步骤 1：编写验证器测试并确认 RED。** 接受具有代表性的可用和不可用建议，以及一个方案草稿。拒绝错误版本、额外键、重复 id、不稳定顺序、超过 3 条建议、无效分数、未知逻辑 id、证据与请求不匹配、无界字符串或数组、类似客户的键、执行字段、非草稿状态、格式错误的人群预览、摘要不匹配，以及过大的 UTF-8 投影。
 
-```ts
+```text
 expect(readRecommendations(validMeta)?.recommendations).toHaveLength(2)
 expect(readRecommendations({ ...validMeta, customerId: 'x' })).toBeNull()
 expect(readCampaignPlan({ ...validPlanMeta, status: 'published' })).toBeNull()
@@ -243,10 +243,10 @@ expect(readCampaignPlan({ ...validPlanMeta, status: 'published' })).toBeNull()
 ### 任务 6：建议和活动方案卡片
 
 **文件：**
-- Create：`packages/client/ui-crm/src/client/CrmRecommendationsRow.tsx`
-- Create：`packages/client/ui-crm/src/client/CrmCampaignPlanRow.tsx`
-- Create：`packages/client/ui-crm/tests/crm-recommendations-row.client.spec.tsx`
-- Create：`packages/client/ui-crm/tests/crm-campaign-plan-row.client.spec.tsx`
+- Create：`packages/client/ui-crm/src/client/CrmCampaignRow.tsx`
+- Create：`packages/client/ui-crm/src/client/CrmCampaignRow.tsx`
+- Create：`packages/client/ui-crm/tests/crm-campaign-row.client.spec.tsx`
+- Create：`packages/client/ui-crm/tests/crm-campaign-row.client.spec.tsx`
 - Modify：`packages/client/ui-crm/src/client/CrmRow.module.css`
 - Modify：`packages/client/ui-crm/src/client/index.ts`
 - Modify：`packages/client/ui-crm/tests/plugin.client.spec.ts`

@@ -36,7 +36,7 @@ English | [中文](2026-09-02-crm-marketing-recommendations.zh.md)
 
 - [ ] **Step 1: Write failing configuration tests.** Add fixtures that accept the six configured ids and reject duplicate ids, unknown metrics or dimensions, cross-dataset requirements, unsupported comparisons, unknown audience conditions, out-of-range thresholds, empty rules, and an executable member opportunity without required recency, consent, spend, or identity concepts.
 
-```ts
+```text
 expect(() => resolveMarketingModel({ opportunities: [valid, { ...valid }] }, semanticModel)).toThrow(/Duplicate opportunity id/)
 expect(resolveMarketingModel(config, semanticModel).opportunityCatalog().find(item => item.id === 'reactivation'))
   .toMatchObject({ available: false, unavailableReason: expect.stringContaining('recency') })
@@ -46,7 +46,7 @@ expect(resolveMarketingModel(config, semanticModel).opportunityCatalog().find(it
 
 - [ ] **Step 3: Implement the immutable closed model.** Define discriminated rule kinds such as `decline`, `growth`, `above_average`, and `below_average`; require exact keys per kind; validate finite bounded thresholds and one-dataset dependencies; resolve unsupported member opportunities as unavailable rather than deleting them.
 
-```ts
+```text
 export interface MarketingModel {
   opportunityCatalog(): readonly OpportunityCatalogItem[]
   resolveOpportunity(id: string): OpportunityDefinition
@@ -73,7 +73,7 @@ export function resolveMarketingModel(config: MarketingConfig, semantic: Semanti
 
 - [ ] **Step 1: Write failing evaluator tests.** Cover closed request validation, fixed request expansion, unavailable types, incomplete coverage, rule thresholds, deterministic scores, stable ordering, ties by opportunity id, maximum three results, source-request retention, and absence of provider fields or customer values.
 
-```ts
+```text
 const result = await evaluateOpportunities(model, request, analyzeFixture, signal)
 expect(result.recommendations).toHaveLength(3)
 expect(result.recommendations.map(item => item.score)).toEqual([...result.recommendations.map(item => item.score)].sort((a, b) => b - a))
@@ -84,7 +84,7 @@ expect(JSON.stringify(result)).not.toMatch(/index|field|customerId|dsl|script/)
 
 - [ ] **Step 3: Implement fixed analysis expansion and evidence extraction.** Construct requests only from resolved definitions. Reuse the existing planner and executor callback, require configured comparison coverage, and copy logical metric values, coverage, completeness, warnings, and normalized requests into bounded evidence records.
 
-```ts
+```text
 export interface OpportunityRequest {
   start: string
   end: string
@@ -154,7 +154,7 @@ export function evaluateOpportunities(
 
 - [ ] **Step 1: Write failing session-resolution tests.** Build real tool-call and tool-result session events. Accept one valid current-session id and reject a missing id, a cross-session id, malformed metadata, duplicate conflicting ids, oversized metadata, and an id whose digest does not match its evidence.
 
-```ts
+```text
 expect(findRecommendation(session, validId).recommendationId).toBe(validId)
 expect(() => findRecommendation(otherSession, validId)).toThrow(/current session/)
 ```
@@ -167,7 +167,7 @@ expect(() => findRecommendation(otherSession, validId)).toThrow(/current session
 
 - [ ] **Step 5: Implement aggregate audience preview.** Expand only configured audience conditions into semantic requests, return counts and bounded distributions, and set `readyForHumanExecution: false` when any required condition or estimate is unavailable.
 
-```ts
+```text
 export interface CampaignPlanResultV1 {
   version: 1
   recommendationId: string
@@ -198,7 +198,7 @@ export interface CampaignPlanResultV1 {
 
 - [ ] **Step 3: Implement tool registrations.** Obtain `exec.agent.session` at the campaign-plan orchestration entry, keep session ownership explicit, reuse the semantic executor callback, and apply the lower of deployment and one-MiB retained-result budgets.
 
-```ts
+```text
 async execute(args, exec) {
   const recommendation = findRecommendation(exec.agent.session, args.recommendationId)
   return json(await createCampaignPlan(marketingModel, recommendation, analyze, exec.signal))
@@ -214,8 +214,8 @@ async execute(args, exec) {
 ### Task 5: Persisted recommendation and plan validation
 
 **Files:**
-- Create: `packages/client/ui-crm/src/client/marketing-model.ts`
-- Create: `packages/client/ui-crm/tests/crm-marketing-model.client.spec.ts`
+- Create: `packages/client/ui-crm/src/client/campaign-model.ts`
+- Create: `packages/client/ui-crm/tests/crm-campaign-model.client.spec.ts`
 - Modify: `packages/client/ui-crm/src/client/locales.ts`
 
 **Interfaces:**
@@ -224,7 +224,7 @@ async execute(args, exec) {
 
 - [ ] **Step 1: Write validator tests and confirm RED.** Accept representative available and unavailable recommendations plus one draft plan. Reject wrong versions, extra keys, duplicate ids, unstable order, more than three recommendations, invalid scores, unknown logical ids, evidence/request mismatch, unbounded strings or arrays, customer-like keys, execution fields, non-draft status, malformed audience previews, digest mismatch, and oversized UTF-8 projections.
 
-```ts
+```text
 expect(readRecommendations(validMeta)?.recommendations).toHaveLength(2)
 expect(readRecommendations({ ...validMeta, customerId: 'x' })).toBeNull()
 expect(readCampaignPlan({ ...validPlanMeta, status: 'published' })).toBeNull()
@@ -243,10 +243,10 @@ expect(readCampaignPlan({ ...validPlanMeta, status: 'published' })).toBeNull()
 ### Task 6: Recommendation and campaign-plan cards
 
 **Files:**
-- Create: `packages/client/ui-crm/src/client/CrmRecommendationsRow.tsx`
-- Create: `packages/client/ui-crm/src/client/CrmCampaignPlanRow.tsx`
-- Create: `packages/client/ui-crm/tests/crm-recommendations-row.client.spec.tsx`
-- Create: `packages/client/ui-crm/tests/crm-campaign-plan-row.client.spec.tsx`
+- Create: `packages/client/ui-crm/src/client/CrmCampaignRow.tsx`
+- Create: `packages/client/ui-crm/src/client/CrmCampaignRow.tsx`
+- Create: `packages/client/ui-crm/tests/crm-campaign-row.client.spec.tsx`
+- Create: `packages/client/ui-crm/tests/crm-campaign-row.client.spec.tsx`
 - Modify: `packages/client/ui-crm/src/client/CrmRow.module.css`
 - Modify: `packages/client/ui-crm/src/client/index.ts`
 - Modify: `packages/client/ui-crm/tests/plugin.client.spec.ts`

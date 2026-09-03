@@ -37,7 +37,7 @@
 - [ ] 强制单数据集请求、已知返回指标 ID、有界行数、完整序列化结果预算和缺失数据拒绝。
 - [ ] 运行建议评估器、语义执行器与规划器测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): evaluate marketing opportunities`。
 
-```ts
+```text
 export type AnalyzeOpportunity = (request: AnalysisRequest, signal: AbortSignal) => Promise<SemanticAnalysisResultV1>
 export function evaluateOpportunities(model: MarketingModel, request: OpportunityRequest, analyze: AnalyzeOpportunity, signal: AbortSignal): Promise<RecommendationResultV1>
 ```
@@ -54,7 +54,7 @@ export function evaluateOpportunities(model: MarketingModel, request: Opportunit
 - [ ] 只展开已配置的汇总人群条件，并保留覆盖、警告、排除项、对照组指导、主要指标、守护指标和限制。
 - [ ] 运行规划器与会话测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): prepare governed campaign plans`。
 
-```ts
+```text
 export interface CampaignPlanResultV1 { version: 1; planId: string; recommendationId: string; status: 'preview'; readyForCreation: boolean; readinessReasons: readonly string[] }
 ```
 
@@ -70,7 +70,7 @@ export interface CampaignPlanResultV1 { version: 1; planId: string; recommendati
 - [ ] 为 MA 端点和 `mkt/catering` 增加显式 Provider 配置；写方法不能通过通用 web fetch 访问。
 - [ ] 运行 Provider 测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): add MA campaign provider`。
 
-```ts
+```text
 export abstract class CrmMaService extends Service { abstract createAudience(spec: ResolvedMaAudience, key: string, signal: AbortSignal): Promise<MaAudienceRef>; abstract createCampaignDraft(spec: ResolvedMaCampaign, key: string, signal: AbortSignal): Promise<MaCampaignRef> }
 ```
 
@@ -85,7 +85,7 @@ export abstract class CrmMaService extends Service { abstract createAudience(spe
 - [ ] 配置 LOYALTY 端点和 `mkt/catering`；已返回身份或状态与配置不符时拒绝白名单模板。
 - [ ] 运行 Provider 测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): add LOYALTY campaign reads`。
 
-```ts
+```text
 export abstract class CrmLoyaltyService extends Service { abstract couponTemplate(id: LoyaltyCouponTemplateId, signal: AbortSignal): Promise<LoyaltyCouponTemplate>; abstract couponSummary(request: LoyaltySummaryRequest, signal: AbortSignal): Promise<LoyaltyCouponSummary> }
 ```
 
@@ -101,14 +101,14 @@ export abstract class CrmLoyaltyService extends Service { abstract couponTemplat
 - [ ] 为可执行机会增加显式示例映射；在会员必需概念和映射完整前保持会员机会不可用。
 - [ ] 运行两个新测试集和营销模型测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): generate governed MA campaigns`。
 
-```ts
+```text
 export type CampaignAction = { kind: 'ma_delivery'; templateId: string } | { kind: 'loyalty_coupon'; templateId: string; capabilityId: string }
 export function buildSinglePathCanvas(config: CanvasConfig, plan: CampaignPlanResultV1, action: CampaignAction): ResolvedMaCanvas
 ```
 
 ### 任务 6：实现幂等草案创建
 
-**文件：** 新建 `packages/examples/crm-campaign/src/events.ts` 及其包脚手架；新建 `apps/cli/config/examples/crm/campaign-draft-creator.ts`；新建包测试和 CLI 创建器测试；重新生成 `packages/core/session/src/known-event-types.ts` 和持久化目录；更新 TypeScript 与 Python SDK 预期投影。
+**文件：** 新建 `packages/examples/crm-campaign/src/index.ts` 及其包脚手架；新建 `apps/cli/config/examples/crm/campaign-draft-creator.ts`；新建包测试和 CLI 创建器测试；重新生成 `packages/core/session/src/known-event-types.ts` 和持久化目录；更新 TypeScript 与 Python SDK 预期投影。
 
 **接口：** 产出 `findCampaignPlan(session, planId)` 和 `createCampaignDraft(session, services, plan, signal): Promise<CampaignDraftResultV1>`；在每次远端写入前后追加带版本的进度事件。
 
@@ -118,7 +118,7 @@ export function buildSinglePathCanvas(config: CanvasConfig, plan: CampaignPlanRe
 - [ ] 写入结果不明确时，必须在重试前按外部业务键查询；无法查询时返回需要人工核对。
 - [ ] 运行创建器、会话、SDK 预期输出和聚焦快照测试；提交 `feat(crm): create idempotent MA campaign drafts`。
 
-```ts
+```text
 export interface CampaignDraftResultV1 { version: 1; planId: string; idempotencyKey: string; audienceId: string; campaignId: string; status: 'inactive'; created: boolean; warnings: readonly string[] }
 ```
 
@@ -134,13 +134,13 @@ export interface CampaignDraftResultV1 { version: 1; planId: string; idempotency
 - [ ] 更新 persona，说明预览、外部写入审批、未启动状态及拒绝启动或发送；扩展 Web 组合断言。
 - [ ] 运行 CLI 与 Web 聚焦测试、定向 Oxlint 和 `git diff --check`；提交 `feat(crm): expose MA campaign draft workflow`。
 
-```ts
+```text
 parameters: { planId: { type: 'string', required: true }, confirmation: { type: 'string', enum: ['create_inactive_draft'], required: true } }
 ```
 
 ### 任务 8：校验并呈现活动流程卡片
 
-**文件：** 新建 `packages/client/ui-crm/src/client/marketing-model.ts`；在 `packages/client/ui-crm/src/client/` 下新建建议、方案和草案卡片；修改本地化字典与 presenter 注册；在 `packages/client/ui-crm/tests/` 下增加对应测试。
+**文件：** 新建 `packages/client/ui-crm/src/client/campaign-model.ts`；在 `packages/client/ui-crm/src/client/` 下新建建议、方案和草案卡片；修改本地化字典与 presenter 注册；在 `packages/client/ui-crm/tests/` 下增加对应测试。
 
 **接口：** 校验不可信的 `crmRecommendations`、`crmCampaignPlan` 和 `crmCampaignDraft` 元数据；按钮调用 `inputActions.setDraft()` 写入本地化提示，绝不提交。
 
@@ -163,7 +163,7 @@ parameters: { planId: { type: 'string', required: true }, confirmation: { type: 
 
 ### 任务 10：完成文档、快照与真实环境验收
 
-**文件：** 修改 CRM 用户指南双语对、`packages/client/ui-crm/README` 双语对、CRM Skills 与 persona 快照；新建已实施 Agent Note 及其分类要求的中文对；更新相关快照夹具。
+**文件：** 修改 CRM 用户指南双语对、`packages/client/ui-crm/README.md` 双语对、CRM Skills 与 persona 快照；新建已实施 Agent Note 及其分类要求的中文对；更新相关快照夹具。
 
 **接口：** 记录准确的“分析 → 建议 → 预览 → 审批 → 未启动草案 → 结果”流程，以及触达前的显式边界。
 

@@ -1,5 +1,6 @@
 /** Governed evidence-to-MA audience policy resolution. */
 import type { ResolvedMaAudience } from './ma-service.ts'
+import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { MarketingModel } from './marketing-model.ts'
 import type { RecommendationV1 } from './opportunity-evaluator.ts'
 
@@ -88,6 +89,7 @@ export function buildMaAudience(
     ...policy.mandatoryExclusions.map(item => ({ source: item.source, key: item.key,
       operator: 'not_equals', values: [item.value] }))]
   return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
-    selectType: 'CONDITION', usageType: 'CAMPAIGN', filter: Object.freeze({ all: Object.freeze(all.map(item => Object.freeze(item))) }),
+    selectType: 'CONDITION', usageType: 'CAMPAIGN',
+    filter: Object.freeze({ all: Object.freeze(all.map(item => Object.freeze(item))) }) as unknown as JsonValue,
     setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })
 }

@@ -41,10 +41,12 @@ export interface CampaignResultsV1 {
  * @returns Recorded MA campaign identity.
  */
 export function findRecordedCampaign(session: Session, planId: string): MaCampaignId {
-  const keys = session.events.filter(event => event.type === 'crm-campaign/draft-started' && event.data.planId === planId)
-    .map(event => event.data.key)
-  const ids = session.events.filter(event => event.type === 'crm-campaign/draft-created' && keys.includes(event.data.key))
-    .map(event => event.data.campaignId as MaCampaignId)
+  const keys = session.events.filter(event => event.type === 'crm-campaign/draft-started'
+    && (event.data as { planId: string }).planId === planId)
+    .map(event => (event.data as { key: string }).key)
+  const ids = session.events.filter(event => event.type === 'crm-campaign/draft-created'
+    && keys.includes((event.data as { key: string }).key))
+    .map(event => (event.data as { campaignId: string }).campaignId as MaCampaignId)
   if (ids.length === 0) throw new Error('Created campaign was not found in the current session')
   if (new Set(ids).size !== 1) throw new Error('Conflicting recorded campaign ids')
   return ids[0]!
@@ -81,8 +83,10 @@ export async function collectCampaignResults(
     const request = { activityId: attribution.loyaltyActivityId, start: period.start, end: period.end }
     const values = await Promise.allSettled([loyalty.activitySummary(request, signal),
       loyalty.participationSummary(request, signal), loyalty.couponSummary(request, signal)])
-    if (values.every(value => value.status === 'fulfilled')) {
-      const [activities, participations, coupons] = values.map(value => (value as PromiseFulfilledResult<Awaited<ReturnType<CrmLoyaltyService['couponSummary']>>>).value)
+    if (values[0]?.status === 'fulfilled' && values[1]?.status === 'fulfilled' && values[2]?.status === 'fulfilled') {
+      const activities = values[0].value
+      const participations = values[1].value
+      const coupons = values[2].value
       loyaltyResult = { available: true, data: { activities: activities.count, participations: participations.count,
         couponsReceived: coupons.received, couponsRedeemed: coupons.redeemed } }
     } else loyaltyResult = reason()

@@ -28,6 +28,7 @@ interface ResultsCard {
   conversion: { available: false; reason: string }
   incrementality: { available: false; reason: string }
 }
+/** Validated browser projection for one CRM marketing tool result. */
 export type CampaignView =
   | { kind: 'recommendations'; data: { recommendations: RecommendationCard[] } }
   | { kind: 'plan'; data: PlanCard }
@@ -81,11 +82,13 @@ export function readCampaign(meta: unknown): CampaignView | null {
   if (kind === 'draft' && exact(data, ['version', 'planId', 'idempotencyKey', 'audienceId', 'campaignId', 'status', 'created', 'warnings'])
     && typeof data.planId === 'string' && typeof data.campaignId === 'string'
     && typeof data.audienceId === 'string' && data.status === 'inactive' && typeof data.created === 'boolean' && strings(data.warnings)) {
-    return { kind, data } as CampaignView
+    return { kind, data } as unknown as CampaignView
   }
   if (kind === 'status' && exact(data, ['id', 'status', 'started', 'archived'])
     && typeof data.id === 'string' && typeof data.status === 'string'
-    && typeof data.started === 'boolean' && typeof data.archived === 'boolean') return { kind, data } as CampaignView
+    && typeof data.started === 'boolean' && typeof data.archived === 'boolean') {
+    return { kind, data } as unknown as CampaignView
+  }
   if (kind === 'results' && exact(data, ['version', 'planId', 'campaignId', 'period', 'ma', 'loyalty', 'conversion', 'incrementality'])
     && data.version === 1 && typeof data.planId === 'string' && typeof data.campaignId === 'string'
     && object(data.period) && exact(data.period, ['start', 'end']) && typeof data.period.start === 'string'
@@ -99,7 +102,7 @@ export function readCampaign(meta: unknown): CampaignView | null {
       || !data.ma.data.channels.every(row => object(row) && exact(row, ['channel', 'count'])
         && typeof row.channel === 'string' && Number.isSafeInteger(row.count) && (row.count as number) >= 0))) return null
     if (!data.ma.available && (!exact(data.ma, ['available', 'reason']) || typeof data.ma.reason !== 'string')) return null
-    return { kind, data } as CampaignView
+    return { kind, data } as unknown as CampaignView
   }
   return null
 }

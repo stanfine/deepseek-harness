@@ -16,10 +16,26 @@ read -rs 'DSH_CRM_ES_PASSWORD?Elasticsearch password: '
 export DSH_CRM_ES_PASSWORD
 export DSH_CRM_ARTIFACT_TOOL_MODULE='file:///absolute/path/to/artifact_tool.mjs'
 export DSH_CRM_EXPORT_ROOT='/private/runtime/path/crm-exports'
+export DSH_CRM_MA_URL='http://your-ma-host:17501'
+export DSH_CRM_MA_ALLOW_HTTP=true
+export DSH_CRM_MA_ALLOW_UNAUTHENTICATED=true
+export DSH_CRM_LOYALTY_URL='http://your-loyalty-host:15000'
+export DSH_CRM_LOYALTY_ALLOW_HTTP=true
+export DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED=true
+export DSH_CRM_MA_DELIVERY_TEMPLATE_ID='deployment-approved-template'
+export DSH_CRM_MA_DELIVERY_CAPABILITY_ID='deployment-approved-capability'
 pnpm dsh web --patch apps/cli/config/examples/crm/cordis.yml
 ```
 
 HTTP Basic authentication does not encrypt credentials or records. Use this option only on a trusted test network; use HTTPS or a secure tunnel for production. Never paste the password into the Agent conversation, a tracked file, or a command-line argument. Changing a credential requires restarting the application.
+
+## Create a governed marketing draft
+
+Ask: `分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` The Agent evaluates governed opportunities from aggregate CRM evidence and returns up to three ranked suggestions. Ask it to prepare a campaign plan for one recommendation. The plan contains an aggregate audience estimate, configured action, validation metrics, limitations, and readiness reasons; it performs no write.
+
+After reviewing the plan, explicitly ask to create its inactive draft. The write tool accepts only the recorded `planId` and fixed `create_inactive_draft` token, then triggers host approval. Audience conditions, exclusions, MA nodes, connectors, templates, capabilities, and provider bodies come from deployment configuration. Approval creates only one audience and one `DRAFT` or `INACTIVE` campaign. The workflow cannot approve, start, send, issue coupons, edit, or delete. Session events and a deterministic business key make retries replay-safe or require manual reconciliation after an ambiguous result.
+
+Use the plan id with `crm_campaign_status`, or with `crm_campaign_results` and a date range. Results resolve the campaign id from the current session and expose aggregate MA and configured LOYALTY values plus availability reasons. They never join customer records. CRM conversion stays unavailable until deployment owns a campaign-to-order attribution rule; incrementality stays unavailable without a governed holdout comparison.
 
 2. Create a new conversation with the **美妆个护 CRM** preset. The overlay replaces the discoverable preset roots; old conversations referencing other presets are not migrated. Use a separate DSH home or deployment when existing coding conversations must remain available. The application retains its existing model settings and other profile configuration.
 

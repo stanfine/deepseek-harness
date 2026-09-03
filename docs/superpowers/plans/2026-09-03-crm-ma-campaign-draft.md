@@ -37,7 +37,7 @@ English | [中文](2026-09-03-crm-ma-campaign-draft.zh.md)
 - [ ] Enforce one-dataset requests, known returned metric ids, bounded rows, complete serialized-result budget, and missing-data refusal.
 - [ ] Run `pnpm exec vitest run apps/cli/tests/crm-opportunity-evaluator.spec.ts apps/cli/tests/crm-semantic-analysis.spec.ts apps/cli/tests/crm-analysis-planner.spec.ts`, targeted Oxlint, and `git diff --check`; commit `feat(crm): evaluate marketing opportunities`.
 
-```ts
+```text
 export type AnalyzeOpportunity = (request: AnalysisRequest, signal: AbortSignal) => Promise<SemanticAnalysisResultV1>
 export function evaluateOpportunities(model: MarketingModel, request: OpportunityRequest, analyze: AnalyzeOpportunity, signal: AbortSignal): Promise<RecommendationResultV1>
 ```
@@ -54,7 +54,7 @@ export function evaluateOpportunities(model: MarketingModel, request: Opportunit
 - [ ] Expand only configured aggregate audience conditions and preserve coverage, warnings, exclusions, holdout guidance, primary metrics, guardrails, and limitations.
 - [ ] Run planner and session tests, targeted Oxlint, and `git diff --check`; commit `feat(crm): prepare governed campaign plans`.
 
-```ts
+```text
 export interface CampaignPlanResultV1 { version: 1; planId: string; recommendationId: string; status: 'preview'; readyForCreation: boolean; readinessReasons: readonly string[] }
 ```
 
@@ -70,7 +70,7 @@ export interface CampaignPlanResultV1 { version: 1; planId: string; recommendati
 - [ ] Add explicit provider configuration for the MA endpoint and `mkt/catering`; keep write methods inaccessible through generic web fetch.
 - [ ] Run the provider test, targeted Oxlint, and `git diff --check`; commit `feat(crm): add MA campaign provider`.
 
-```ts
+```text
 export abstract class CrmMaService extends Service { abstract createAudience(spec: ResolvedMaAudience, key: string, signal: AbortSignal): Promise<MaAudienceRef>; abstract createCampaignDraft(spec: ResolvedMaCampaign, key: string, signal: AbortSignal): Promise<MaCampaignRef> }
 ```
 
@@ -85,7 +85,7 @@ export abstract class CrmMaService extends Service { abstract createAudience(spe
 - [ ] Configure the LOYALTY endpoint and `mkt/catering`; reject an allowlisted template whose returned identity or status differs from configuration.
 - [ ] Run provider tests, targeted Oxlint, and `git diff --check`; commit `feat(crm): add LOYALTY campaign reads`.
 
-```ts
+```text
 export abstract class CrmLoyaltyService extends Service { abstract couponTemplate(id: LoyaltyCouponTemplateId, signal: AbortSignal): Promise<LoyaltyCouponTemplate>; abstract couponSummary(request: LoyaltySummaryRequest, signal: AbortSignal): Promise<LoyaltyCouponSummary> }
 ```
 
@@ -101,14 +101,14 @@ export abstract class CrmLoyaltyService extends Service { abstract couponTemplat
 - [ ] Add explicit example mappings for executable opportunities; keep member opportunities unavailable until their required concepts and mappings exist.
 - [ ] Run both new suites plus marketing-model tests, targeted Oxlint, and `git diff --check`; commit `feat(crm): generate governed MA campaigns`.
 
-```ts
+```text
 export type CampaignAction = { kind: 'ma_delivery'; templateId: string } | { kind: 'loyalty_coupon'; templateId: string; capabilityId: string }
 export function buildSinglePathCanvas(config: CanvasConfig, plan: CampaignPlanResultV1, action: CampaignAction): ResolvedMaCanvas
 ```
 
 ### Task 6: Implement idempotent draft creation
 
-**Files:** Create `packages/examples/crm-campaign/src/events.ts` and its package scaffold; create `apps/cli/config/examples/crm/campaign-draft-creator.ts`; create package and CLI creator tests; regenerate `packages/core/session/src/known-event-types.ts` and the persistence catalog; update TypeScript and Python SDK expected projections required by the session vocabulary.
+**Files:** Create `packages/examples/crm-campaign/src/index.ts` and its package scaffold; create `apps/cli/config/examples/crm/campaign-draft-creator.ts`; create package and CLI creator tests; regenerate `packages/core/session/src/known-event-types.ts` and the persistence catalog; update TypeScript and Python SDK expected projections required by the session vocabulary.
 
 **Interfaces:** Produce `findCampaignPlan(session, planId)` and `createCampaignDraft(session, services, plan, signal): Promise<CampaignDraftResultV1>`; append versioned progress events before and after each remote write.
 
@@ -118,7 +118,7 @@ export function buildSinglePathCanvas(config: CanvasConfig, plan: CampaignPlanRe
 - [ ] Enforce lookup by external business key before retrying an ambiguous write; return manual reconciliation when lookup is unavailable.
 - [ ] Run creator, session, SDK expected-output, and focused snapshot tests; commit `feat(crm): create idempotent MA campaign drafts`.
 
-```ts
+```text
 export interface CampaignDraftResultV1 { version: 1; planId: string; idempotencyKey: string; audienceId: string; campaignId: string; status: 'inactive'; created: boolean; warnings: readonly string[] }
 ```
 
@@ -134,13 +134,13 @@ export interface CampaignDraftResultV1 { version: 1; planId: string; idempotency
 - [ ] Update the persona to explain preview, external-write approval, inactive status, and refusal to start or send; extend Web composition assertions.
 - [ ] Run CLI and Web focused tests, targeted Oxlint, and `git diff --check`; commit `feat(crm): expose MA campaign draft workflow`.
 
-```ts
+```text
 parameters: { planId: { type: 'string', required: true }, confirmation: { type: 'string', enum: ['create_inactive_draft'], required: true } }
 ```
 
 ### Task 8: Validate and render campaign workflow cards
 
-**Files:** Create `packages/client/ui-crm/src/client/marketing-model.ts`; create recommendation, plan, and draft card components under `packages/client/ui-crm/src/client/`; modify locale dictionaries and presenter registration; add corresponding tests under `packages/client/ui-crm/tests/`.
+**Files:** Create `packages/client/ui-crm/src/client/campaign-model.ts`; create recommendation, plan, and draft card components under `packages/client/ui-crm/src/client/`; modify locale dictionaries and presenter registration; add corresponding tests under `packages/client/ui-crm/tests/`.
 
 **Interfaces:** Validate untrusted `crmRecommendations`, `crmCampaignPlan`, and `crmCampaignDraft` metadata; buttons call `inputActions.setDraft()` with localized prompts and never submit.
 
@@ -163,7 +163,7 @@ parameters: { planId: { type: 'string', required: true }, confirmation: { type: 
 
 ### Task 10: Complete docs, snapshots, and real-environment acceptance
 
-**Files:** Modify CRM user-guide pair, `packages/client/ui-crm/README` pair, CRM skills and persona snapshots; create an implemented Agent Note and its Chinese counterpart if required by its classification; update relevant snapshot fixtures.
+**Files:** Modify CRM user-guide pair, `packages/client/ui-crm/README.md` pair, CRM skills and persona snapshots; create an implemented Agent Note and its Chinese counterpart if required by its classification; update relevant snapshot fixtures.
 
 **Interfaces:** Document the exact analysis → recommendation → preview → approval → inactive draft → results workflow and the explicit boundary before delivery.
 

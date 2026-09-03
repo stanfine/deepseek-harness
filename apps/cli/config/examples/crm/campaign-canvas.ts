@@ -14,7 +14,11 @@ export interface CanvasConfig {
   actions: CanvasActionDefinition[]
 }
 /** Immutable validated canvas configuration. */
-export interface ResolvedCanvasConfig extends CanvasConfig {}
+export interface ResolvedCanvasConfig {
+  readonly nodeTypes: Readonly<CanvasConfig['nodeTypes']>
+  readonly connectorId: string
+  readonly actions: readonly Readonly<CanvasActionDefinition>[]
+}
 /** One generated MA canvas node. */
 export interface ResolvedMaNode { id: string; type: string; config: JsonValue }
 /** One generated directed MA edge. */

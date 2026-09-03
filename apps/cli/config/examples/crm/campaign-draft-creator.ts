@@ -60,20 +60,29 @@ function operationIdentity(services: CampaignDraftServices, plan: CampaignPlanRe
 }
 
 function completed(session: Session, key: CrmCampaignIdempotencyKey): CampaignDraftResultV1 | undefined {
-  const records = session.events.filter(event => event.type === 'crm-campaign/draft-created' && event.data.key === key)
+  const records = session.events.filter(event => event.type === 'crm-campaign/draft-created'
+    && (event.data as { key: string }).key === key)
   if (new Set(records.map(event => JSON.stringify(event.data))).size > 1) throw new Error('Conflicting completed campaign records')
-  const value = records[0]?.data
+  const value = records[0]?.data as { key: CrmCampaignIdempotencyKey
+    audienceId: CrmMaAudienceId
+    campaignId: CrmMaCampaignId
+    status: 'inactive' } | undefined
   if (!value) return undefined
-  const started = session.events.find(event => event.type === 'crm-campaign/draft-started' && event.data.key === key)
+  const started = session.events.find(event => event.type === 'crm-campaign/draft-started'
+    && (event.data as { key: string }).key === key)
   if (!started) throw new Error('Campaign completion has no matching start record')
-  return { version: 1, planId: started.data.planId, idempotencyKey: key, audienceId: value.audienceId,
+  const startData = started.data as { planId: CrmCampaignPlanId }
+  return { version: 1, planId: startData.planId, idempotencyKey: key, audienceId: value.audienceId,
     campaignId: value.campaignId, status: 'inactive', created: false, warnings: Object.freeze([]) }
 }
 
 function recordedAudience(session: Session, key: CrmCampaignIdempotencyKey): MaAudienceId | undefined {
-  const records = session.events.filter(event => event.type === 'crm-campaign/audience-created' && event.data.key === key)
-  if (new Set(records.map(event => event.data.audienceId)).size > 1) throw new Error('Conflicting campaign audience records')
-  return records[0]?.data.audienceId as MaAudienceId | undefined
+  const records = session.events.filter(event => event.type === 'crm-campaign/audience-created'
+    && (event.data as { key: string }).key === key)
+  if (new Set(records.map(event => (event.data as { audienceId: string }).audienceId)).size > 1) {
+    throw new Error('Conflicting campaign audience records')
+  }
+  return (records[0]?.data as { audienceId: CrmMaAudienceId } | undefined)?.audienceId as unknown as MaAudienceId | undefined
 }
 
 function ambiguous(error: unknown): boolean {
@@ -101,9 +110,10 @@ export async function createCampaignDraft(
   try {
     const count = await services.ma.countAudience(services.audience, signal)
     if (count > services.maxAudienceSize) throw new Error('Audience exceeds configured maximum')
-    const validation = await services.ma.validateCanvas(services.campaign.id as MaCampaignId, services.canvas, signal)
+    const validation = await services.ma.validateCanvas(services.campaign.id as MaCampaignId,
+      services.canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, signal)
     if (validation.length > 0) throw new Error('MA canvas validation failed')
-    await services.ma.predictCanvas(services.canvas, signal)
+    await services.ma.predictCanvas(services.canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, signal)
   } catch {
     session.append('crm-campaign/draft-failed', { key, stage: 'validation', code: 'FAILED' })
     throw new Error('Campaign validation failed')
@@ -125,7 +135,7 @@ export async function createCampaignDraft(
         throw new Error('Audience creation failed')
       }
     }
-    session.append('crm-campaign/audience-created', { key, audienceId: audienceId as CrmMaAudienceId })
+    session.append('crm-campaign/audience-created', { key, audienceId: audienceId as unknown as CrmMaAudienceId })
   }
   let campaignId: MaCampaignId
   try {
@@ -147,8 +157,8 @@ export async function createCampaignDraft(
       throw new Error('Campaign creation failed')
     }
   }
-  session.append('crm-campaign/draft-created', { key, audienceId: audienceId as CrmMaAudienceId,
-    campaignId: campaignId! as CrmMaCampaignId, status: 'inactive' })
+  session.append('crm-campaign/draft-created', { key, audienceId: audienceId as unknown as CrmMaAudienceId,
+    campaignId: campaignId! as unknown as CrmMaCampaignId, status: 'inactive' })
   return { version: 1, planId: plan.planId, idempotencyKey: key, audienceId, campaignId: campaignId!,
     status: 'inactive', created: true, warnings: Object.freeze([]) }
 }

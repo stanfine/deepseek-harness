@@ -377,7 +377,8 @@ export function apply(ctx: Context, config: CrmConfig): void {
       const canvas = buildSinglePathCanvas(canvasConfig, plan, action)
       const campaign: ResolvedMaCampaign = { id: `campaign_${plan.planId}`, name: `CRM ${recommendation.title}`,
         groupId: '0', campaignCode: `CRM_${plan.planId}`, category: 'CRM', type: 'AUTOMATION', priority: 5,
-        summary: recommendation.actionTemplate, setting: canvas, extra: { planId: plan.planId } }
+        summary: recommendation.actionTemplate,
+        setting: canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, extra: { planId: plan.planId } }
       return json(await createCampaignDraft(exec.agent.session, { ma, tenantId: 'mkt',
         maxAudienceSize: policy.maxEstimatedSize, audience, campaign, canvas }, plan, exec.signal))
     },

@@ -16,10 +16,26 @@ read -rs 'DSH_CRM_ES_PASSWORD?Elasticsearch password: '
 export DSH_CRM_ES_PASSWORD
 export DSH_CRM_ARTIFACT_TOOL_MODULE='file:///absolute/path/to/artifact_tool.mjs'
 export DSH_CRM_EXPORT_ROOT='/private/runtime/path/crm-exports'
+export DSH_CRM_MA_URL='http://your-ma-host:17501'
+export DSH_CRM_MA_ALLOW_HTTP=true
+export DSH_CRM_MA_ALLOW_UNAUTHENTICATED=true
+export DSH_CRM_LOYALTY_URL='http://your-loyalty-host:15000'
+export DSH_CRM_LOYALTY_ALLOW_HTTP=true
+export DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED=true
+export DSH_CRM_MA_DELIVERY_TEMPLATE_ID='deployment-approved-template'
+export DSH_CRM_MA_DELIVERY_CAPABILITY_ID='deployment-approved-capability'
 pnpm dsh web --patch apps/cli/config/examples/crm/cordis.yml
 ```
 
 HTTP Basic 认证不会加密凭据或数据。仅在可信测试网络中开启此选项；生产环境使用 HTTPS 或安全隧道。不要将密码粘贴进 Agent 会话、被跟踪的文件或命令行参数。凭据变更后需要重启应用。
+
+## 创建受治理的营销草稿
+
+输入：`分析 2025 年 3 月相对上月的营销机会，先给建议，不要创建活动。` Agent 从 CRM 汇总证据评估受治理的机会，并返回最多三条排序建议。然后要求它为其中一条建议准备活动计划。计划包含汇总人群估算、配置动作、验证指标、限制和就绪原因，不执行写入。
+
+审阅计划后，明确要求创建对应的未启动草稿。写工具只接受已记录的 `planId` 和固定确认词 `create_inactive_draft`，随后触发宿主审批。人群条件、排除规则、MA 节点、连接器、模板、能力和提供方请求体均来自部署配置。批准后只创建一个人群和一个 `DRAFT` 或 `INACTIVE` 活动。工作流不能审批活动、启动、发送、发券、编辑或删除。会话事件和确定性业务键使重试能够安全复用；远端结果不明确且无法查询时要求人工对账。
+
+使用计划 id 调用 `crm_campaign_status`，或指定日期范围调用 `crm_campaign_results`。结果从当前会话解析活动 id，只公开 MA 与已配置 LOYALTY 的汇总值及不可用原因，不关联客户明细。部署方建立活动到订单的归因规则前，CRM 转化保持不可用；没有受治理的留出组对比时，增量性保持不可用。
 
 2. 新建会话，选择 **美妆个护 CRM** 预设。此覆盖配置替换可发现的预设根目录，不会迁移引用其他预设的旧会话。需要保留现有编码会话时，使用独立的 DSH 主目录或部署。应用保留现有模型设置及其他配置。
 

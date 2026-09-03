@@ -122,7 +122,7 @@ export class CrmMaHttpProvider implements CrmMaService {
   }
 
   async findAudienceByBusinessKey(key: string, signal: AbortSignal): Promise<MaAudienceRef | undefined> {
-    const value = await this.request(`/audience/list?businessKey=${encodeURIComponent(key)}`, 'GET', undefined, signal)
+    const value = await this.request('/audience/list?proj=id,name,extra', 'GET', undefined, signal)
     const rows = Array.isArray(value) ? value : object(value).data
     if (!Array.isArray(rows)) throw new Error('Invalid MA audience list')
     const found = rows.map(object).find(item => object(item.extra).businessKey === key)
@@ -147,7 +147,7 @@ export class CrmMaHttpProvider implements CrmMaService {
   }
 
   async findCampaignByBusinessKey(key: string, signal: AbortSignal): Promise<MaCampaignRef | undefined> {
-    const value = await this.request(`/campaign/list?businessKey=${encodeURIComponent(key)}`, 'GET', undefined, signal)
+    const value = await this.request('/campaign/list?proj=id,name,status,extra', 'GET', undefined, signal)
     const rows = Array.isArray(value) ? value : object(value).data
     if (!Array.isArray(rows)) throw new Error('Invalid MA campaign list')
     const found = rows.map(object).find(item => object(item.extra).businessKey === key)
