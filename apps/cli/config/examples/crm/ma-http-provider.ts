@@ -4,6 +4,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import z from '@deepseek-ai/schemastery'
 import type { CrmMaService, MaAudienceId, MaAudienceRef, MaCampaignId, MaCampaignRef, MaCampaignStatus,
   MaReachSummary, ResolvedMaAudience, ResolvedMaCampaign } from './ma-service.ts'
+import { compileMaAudience } from './ma-wire.ts'
 
 /** Explicit transport and deployment settings for MA. */
 export interface MaConfig {
@@ -107,7 +108,9 @@ export class CrmMaHttpProvider implements CrmMaService {
   }
 
   private audienceBody(spec: ResolvedMaAudience, key?: string): JsonValue {
-    return { ...spec, own: true, extra: { ...spec.extra, ...(key === undefined ? {} : { businessKey: key }) } }
+    const wire = compileMaAudience(spec)
+    return { ...spec, filter: wire.filter, setting: wire.setting, own: true,
+      extra: { ...spec.extra, ...(key === undefined ? {} : { businessKey: key }) } }
   }
 
   async countAudience(spec: ResolvedMaAudience, signal: AbortSignal): Promise<number> {
@@ -133,10 +136,6 @@ export class CrmMaHttpProvider implements CrmMaService {
     const value = await this.request(`/campaign/${encodeURIComponent(id)}/validate`, 'POST', canvas, signal)
     if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) throw new Error('Invalid MA validation response')
     return Object.freeze([...value]) as readonly string[]
-  }
-
-  predictCanvas(canvas: JsonValue, signal: AbortSignal): Promise<JsonValue> {
-    return this.request('/campaign/predict/start', 'POST', canvas, signal) as Promise<JsonValue>
   }
 
   async createCampaignDraft(spec: ResolvedMaCampaign, key: string, signal: AbortSignal): Promise<MaCampaignRef> {

@@ -13,7 +13,15 @@ const audience = { id: 'aud-plan', name: 'Audience', description: 'Test', select
   filter: { all: [] }, setting: { dwhType: 'MA' }, extra: { planId: plan.planId } }
 const campaign = { id: 'campaign-plan', name: 'Campaign', groupId: 'group', campaignCode: 'code', category: 'category',
   type: 'AUTOMATION', priority: 0, summary: 'Test', setting: { type: 'FLOW' }, extra: { planId: plan.planId } }
-const canvas = { nodes: [], edges: [] }
+const canvas = { nodes: [
+  { id: 'entry', type: 'START', config: {} }, { id: 'audience', type: 'AUDIENCE', config: {} },
+  { id: 'action', type: 'ACTION', config: { kind: 'ma_delivery', templateId: 'content', capabilityId: 'sms' } },
+  { id: 'end', type: 'END', config: {} },
+], edges: [
+  { id: 'edge-1', source: 'entry', target: 'audience', connectorId: 'sequence' },
+  { id: 'edge-2', source: 'audience', target: 'action', connectorId: 'sequence' },
+  { id: 'edge-3', source: 'action', target: 'end', connectorId: 'sequence' },
+] }
 
 function recordedPlan(value = plan) {
   const session = Session.create(SessionId('current'))
@@ -28,7 +36,6 @@ function services(overrides: Record<string, unknown> = {}) {
   const ma = {
     async countAudience() { calls.count++; return 42 },
     async validateCanvas() { return [] },
-    async predictCanvas() { return { valid: true } },
     async createAudience() { calls.audience++; return { id: 'ma-audience', name: 'Audience' } },
     async findAudienceByBusinessKey() { calls.findAudience++; return undefined },
     async createCampaignDraft() { calls.campaign++; return { id: 'ma-campaign', name: 'Campaign', status: 'DRAFT' } },

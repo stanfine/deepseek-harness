@@ -45,7 +45,6 @@ export interface CrmMaService {
   createAudience(spec: ResolvedMaAudience, key: string, signal: AbortSignal): Promise<MaAudienceRef>
   findAudienceByBusinessKey(key: string, signal: AbortSignal): Promise<MaAudienceRef | undefined>
   validateCanvas(campaignId: MaCampaignId, canvas: JsonValue, signal: AbortSignal): Promise<readonly string[]>
-  predictCanvas(canvas: JsonValue, signal: AbortSignal): Promise<JsonValue>
   createCampaignDraft(spec: ResolvedMaCampaign, key: string, signal: AbortSignal): Promise<MaCampaignRef>
   findCampaignByBusinessKey(key: string, signal: AbortSignal): Promise<MaCampaignRef | undefined>
   campaignStatus(id: MaCampaignId, signal: AbortSignal): Promise<MaCampaignStatus>

@@ -33,14 +33,19 @@ describe('CRM MA HTTP provider', () => {
     })
     const provider = new CrmMaHttpProvider(config(url), {})
     const spec = { id: 'aud-plan', name: 'Test audience', description: 'Governed test', selectType: 'CONDITION',
-      usageType: 'CAMPAIGN', filter: { and: [{ field: 'tag', operator: 'eq', value: 'vip' }] }, setting: {}, extra: {} }
+      usageType: 'CAMPAIGN', filter: { all: [
+        { source: 'tag', key: 'segment', operator: 'in', values: ['tag-1'] },
+        { source: 'tag', key: 'blacklist', operator: 'not_equals', values: ['tag-black'] },
+      ] }, setting: {}, extra: {} }
     await expect(provider.countAudience(spec, AbortSignal.timeout(500))).resolves.toBe(42)
     await expect(provider.createAudience(spec, 'key-1', AbortSignal.timeout(500))).resolves.toEqual({ id: 'aud-1', name: 'Test audience' })
     expect(calls.map(call => [call.method, call.url])).toEqual([
       ['POST', '/api/ma-manage/mkt/catering/audience/count-customers'],
       ['POST', '/api/ma-manage/mkt/catering/audience'],
     ])
-    expect(JSON.parse(calls[1]!.body)).toMatchObject({ id: 'aud-plan', own: true, extra: { businessKey: 'key-1' } })
+    expect(JSON.parse(calls[1]!.body)).toMatchObject({ id: 'aud-plan', own: true, extra: { businessKey: 'key-1' },
+      filter: { tagFilter: { requiredTags: ['tag-1'], optionalTags: [], excludedTags: ['tag-black'] } },
+      setting: { dwhType: 'lianwei_cdp', audienceGroup: 'outside' } })
   })
 
   it('requires explicit HTTP and unauthenticated policies', () => {

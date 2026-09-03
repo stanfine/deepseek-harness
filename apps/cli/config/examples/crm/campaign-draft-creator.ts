@@ -6,6 +6,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import { campaignPlanIdFor, type CampaignPlanResultV1 } from './campaign-planner.ts'
 import type { CrmMaService, MaAudienceId, MaCampaignId, ResolvedMaAudience, ResolvedMaCampaign } from './ma-service.ts'
 import type { ResolvedMaCanvas } from './campaign-canvas.ts'
+import { compileMaCampaignSetting, compileMaFlowData } from './ma-wire.ts'
 
 /** Fully resolved internal creation inputs; no field is model supplied. */
 export interface CampaignDraftServices {
@@ -110,13 +111,9 @@ export async function createCampaignDraft(
   try {
     const count = await services.ma.countAudience(services.audience, signal)
     if (count > services.maxAudienceSize) throw new Error('Audience exceeds configured maximum')
-    const validation = await services.ma.validateCanvas(services.campaign.id as MaCampaignId,
-      services.canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, signal)
-    if (validation.length > 0) throw new Error('MA canvas validation failed')
-    await services.ma.predictCanvas(services.canvas as unknown as import('@deepseek-ai/dsh-session').JsonValue, signal)
   } catch {
     session.append('crm-campaign/draft-failed', { key, stage: 'validation', code: 'FAILED' })
-    throw new Error('Campaign validation failed')
+    throw new Error('Campaign audience validation failed')
   }
   let audienceId = recordedAudience(session, key)
   if (!audienceId) {
@@ -137,9 +134,18 @@ export async function createCampaignDraft(
     }
     session.append('crm-campaign/audience-created', { key, audienceId: audienceId as unknown as CrmMaAudienceId })
   }
+  const flowData = compileMaFlowData(services.canvas, audienceId)
+  try {
+    const validation = await services.ma.validateCanvas(services.campaign.id as MaCampaignId, flowData, signal)
+    if (validation.length > 0) throw new Error('MA canvas validation failed')
+  } catch {
+    session.append('crm-campaign/draft-failed', { key, stage: 'validation', code: 'FAILED' })
+    throw new Error('Campaign canvas validation failed')
+  }
+  const campaign = { ...services.campaign, setting: compileMaCampaignSetting(flowData) }
   let campaignId: MaCampaignId
   try {
-    const created = await services.ma.createCampaignDraft(services.campaign, key, signal)
+    const created = await services.ma.createCampaignDraft(campaign, key, signal)
     if (!['DRAFT', 'INACTIVE'].includes(created.status.toUpperCase())) throw new Error('MA campaign is not inactive')
     campaignId = created.id
   } catch (error) {

@@ -13,7 +13,7 @@ function session() {
 }
 function ma(): CrmMaService {
   return { countAudience: vi.fn(), createAudience: vi.fn(), findAudienceByBusinessKey: vi.fn(), validateCanvas: vi.fn(),
-    predictCanvas: vi.fn(), createCampaignDraft: vi.fn(), findCampaignByBusinessKey: vi.fn(),
+    createCampaignDraft: vi.fn(), findCampaignByBusinessKey: vi.fn(),
     campaignStatus: vi.fn(async id => ({ id, status: 'DRAFT', started: false, archived: false })),
     reachSummary: vi.fn(async () => ({ reachPeople: 12, channels: [{ channel: 'SMS', count: 12 }] })) }
 }
