@@ -1,13 +1,18 @@
 /** Native CRM tools mounted only by the opt-in CRM preset. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { defineTool, type ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ParameterSchemaSpec, type PreToolDecision } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { ElasticsearchReader, resolveConfig, type ReaderConfig } from './elasticsearch.ts'
 import { resolveSemanticModel, type SemanticConfig } from './semantic-model.ts'
 import { resolveMarketingModel, type MarketingConfig } from './marketing-model.ts'
-import { resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
-import { resolveCanvasConfig, type CanvasConfig } from './campaign-canvas.ts'
+import { buildMaAudience, resolveAudiencePolicy, type AudiencePolicyConfig } from './audience-policy.ts'
+import { buildSinglePathCanvas, resolveCanvasConfig, type CampaignAction, type CanvasConfig } from './campaign-canvas.ts'
+import { createCampaignPlan, findRecommendation } from './campaign-planner.ts'
+import { createCampaignDraft, findCampaignPlan } from './campaign-draft-creator.ts'
+import { evaluateOpportunities } from './opportunity-evaluator.ts'
+import type { CrmMaService, MaCampaignId, ResolvedMaCampaign } from './ma-service.ts'
+import type { CrmLoyaltyService } from './loyalty-service.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
 import { businessDate, resolveReportPeriods } from './report-periods.ts'
@@ -140,6 +145,16 @@ function weeklyConfig(config: ReaderConfig): WeeklyReportConfig {
 
 function json(value: unknown): JsonValue { return value as JsonValue }
 
+/** Return the host-approval decision for a CRM tool name.
+ * @param toolName Dispatched tool name.
+ * @returns An approval request only for the external MA write.
+ */
+export function crmCampaignPreExecute(toolName: string): PreToolDecision | undefined {
+  return toolName === 'crm_campaign_create_draft'
+    ? { kind: 'ask', reason: 'Create the reviewed audience and inactive campaign draft in MA?' }
+    : undefined
+}
+
 /** Build the exact retained semantic tool projection used by content and presentation metadata.
  * @param result Closed semantic analysis result.
  * @returns Final tool content and metadata fields.
@@ -181,14 +196,24 @@ export function apply(ctx: Context, config: CrmConfig): void {
   const exportBaseUrl = downloadBaseUrl(config.excel.downloadBaseUrl)
   const semanticModel = resolveSemanticModel(config.semantic, config.datasets)
   const marketingModel = resolveMarketingModel(config.marketing, semanticModel)
-  resolveAudiencePolicy({ policies: config.activation.policies }, marketingModel)
-  resolveCanvasConfig(config.activation.canvas)
+  const audiencePolicies = resolveAudiencePolicy({ policies: config.activation.policies }, marketingModel)
+  const canvasConfig = resolveCanvasConfig(config.activation.canvas)
   const reader = new ElasticsearchReader(resolveConfig(config, process.env))
   const weekly = new WeeklyReportReader(weeklyConfig(config), (dataset, body, signal) => reader.searchConfigured(dataset, body, signal))
   let excelExports: CrmExcelExports | undefined
+  let ma: CrmMaService | undefined
+  let loyalty: CrmLoyaltyService | undefined
   ctx.inject(['crmExcelExports'], (exportCtx) => {
     excelExports = Reflect.get(exportCtx, 'crmExcelExports') as CrmExcelExports
     exportCtx.effect(() => () => { excelExports = undefined })
+  })
+  ctx.inject(['crmMa'], (serviceCtx) => {
+    ma = serviceCtx.crmMa
+    serviceCtx.effect(() => () => { ma = undefined })
+  })
+  ctx.inject(['crmLoyalty'], (serviceCtx) => {
+    loyalty = serviceCtx.crmLoyalty
+    serviceCtx.effect(() => () => { loyalty = undefined })
   })
   const output = {
     schema: { type: 'json' as const },
@@ -276,10 +301,102 @@ export function apply(ctx: Context, config: CrmConfig): void {
     assertSemanticToolProjectionSize(result, Math.min(config.maxResponseBytes, CRM_ANALYSIS_MAX_BYTES))
     return json(result)
   }
+  const analyzeOpportunity = async (request: AnalysisRequest, signal: AbortSignal) => {
+    const value = await executeAnalysis(request, signal, false)
+    return value as unknown as SemanticAnalysisResultV1
+  }
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_metric_catalog', description: 'List configured CRM business metrics, meanings, availability, and limits.',
     parameters: {}, output,
     async execute() { return semanticModel.metricCatalog() },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_opportunity_catalog', description: 'List governed CRM marketing opportunities, evidence requirements, limitations and activation availability.',
+    parameters: {}, output,
+    async execute() { return json(marketingModel.opportunityCatalog().map(item => ({ ...item,
+      activationAvailable: audiencePolicies.has(item.id) }))) },
+  })))
+  const recommendationOutput = {
+    ...output,
+    presentationMeta(args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
+      return { crmRecommendations: { version: 1, request: args as import('@deepseek-ai/dsh-session').JsonValue, data: value } }
+    },
+  }
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_recommend_opportunities', description: 'Evaluate configured marketing opportunities from bounded aggregate CRM evidence and return up to three ranked recommendations.',
+    parameters: { start: { type: 'string', required: true }, end: { type: 'string', required: true },
+      comparison: { type: 'string', enum: ['previous_period', 'prior_year'], required: true },
+      opportunityIds: { type: 'array', items: { type: 'string' } } }, output: recommendationOutput,
+    async execute(args, exec) { return json(await evaluateOpportunities(marketingModel, args, analyzeOpportunity, exec.signal)) },
+  })))
+  const planOutput = {
+    ...output,
+    presentationMeta(_args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
+      return { crmCampaignPlan: { version: 1, data: value } }
+    },
+  }
+  const campaignOutput = (kind: 'draft' | 'status' | 'results') => ({
+    ...output,
+    presentationMeta(_args: unknown, value: import('@deepseek-ai/dsh-session').JsonValue) {
+      return { crmCampaign: { version: 1, kind, data: value } }
+    },
+  })
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_campaign_plan', description: 'Prepare a no-write campaign preview from one recommendation recorded in the current session.',
+    parameters: { recommendationId: { type: 'string', required: true } }, output: planOutput,
+    async execute(args, exec) {
+      if (!exec.agent) throw new Error('CRM campaign planning requires an agent session')
+      const recommendation = findRecommendation(exec.agent.session, args.recommendationId)
+      return json(await createCampaignPlan(marketingModel, recommendation, analyzeOpportunity, exec.signal))
+    },
+  })))
+  ctx.effect(() => ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
+    const decision = crmCampaignPreExecute(exec.name)
+    return decision === undefined ? next() : Promise.resolve(decision)
+  }))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_campaign_create_draft', description: 'Create the reviewed MA audience and inactive campaign draft. Requires the exact confirmation token and host approval.',
+    parameters: { planId: { type: 'string', required: true },
+      confirmation: { type: 'string', enum: ['create_inactive_draft'], required: true } }, output: campaignOutput('draft'),
+    async execute(args, exec) {
+      if (!exec.agent) throw new Error('CRM campaign creation requires an agent session')
+      if (!ma) throw new Error('CRM MA service is unavailable')
+      const plan = findCampaignPlan(exec.agent.session, args.planId)
+      const recommendation = findRecommendation(exec.agent.session, plan.recommendationId)
+      const policy = audiencePolicies.get(recommendation.opportunityId)
+      if (!policy) throw new Error('No governed audience policy is configured')
+      const actionDefinition = canvasConfig.actions.find(item => policy.actionIds.includes(item.id))
+      if (!actionDefinition || actionDefinition.templateId.startsWith('unconfigured_')
+        || actionDefinition.capabilityId.startsWith('unconfigured_')) throw new Error('Campaign action is not configured')
+      if (actionDefinition.kind === 'loyalty_coupon' && !loyalty) throw new Error('CRM LOYALTY service is unavailable')
+      const action: CampaignAction = actionDefinition.kind === 'ma_delivery'
+        ? { kind: 'ma_delivery', templateId: actionDefinition.templateId }
+        : { kind: 'loyalty_coupon', templateId: actionDefinition.templateId, capabilityId: actionDefinition.capabilityId }
+      const audience = buildMaAudience(policy, recommendation, plan.planId, plan.audiencePreview.estimatedCount)
+      const canvas = buildSinglePathCanvas(canvasConfig, plan, action)
+      const campaign: ResolvedMaCampaign = { id: `campaign_${plan.planId}`, name: `CRM ${recommendation.title}`,
+        groupId: '0', campaignCode: `CRM_${plan.planId}`, category: 'CRM', type: 'AUTOMATION', priority: 5,
+        summary: recommendation.actionTemplate, setting: canvas, extra: { planId: plan.planId } }
+      return json(await createCampaignDraft(exec.agent.session, { ma, tenantId: 'mkt',
+        maxAudienceSize: policy.maxEstimatedSize, audience, campaign, canvas }, plan, exec.signal))
+    },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_campaign_status', description: 'Read aggregate lifecycle status for an MA campaign.',
+    parameters: { campaignId: { type: 'string', required: true } }, output: campaignOutput('status'),
+    async execute(args, exec) {
+      if (!ma) throw new Error('CRM MA service is unavailable')
+      return json(await ma.campaignStatus(args.campaignId as MaCampaignId, exec.signal))
+    },
+  })))
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'crm_campaign_results', description: 'Read aggregate reach results for an MA campaign in a closed date range.',
+    parameters: { campaignId: { type: 'string', required: true }, start: { type: 'string', required: true },
+      end: { type: 'string', required: true } }, output: campaignOutput('results'),
+    async execute(args, exec) {
+      if (!ma) throw new Error('CRM MA service is unavailable')
+      return json(await ma.reachSummary(args.campaignId as MaCampaignId, args.start, args.end, exec.signal))
+    },
   })))
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_dimension_catalog', description: 'List configured CRM analysis dimensions, supported filters, and limits.',

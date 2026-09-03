@@ -44,6 +44,12 @@ it('mounts the CRM example through the Web session controller', async () => {
   vi.stubEnv('DSH_CRM_ALLOW_HTTP', 'true')
   vi.stubEnv('DSH_CRM_ES_USERNAME', 'fixture-user')
   vi.stubEnv('DSH_CRM_ES_PASSWORD', 'fixture-password')
+  vi.stubEnv('DSH_CRM_MA_URL', `http://127.0.0.1:${(server.address() as AddressInfo).port}`)
+  vi.stubEnv('DSH_CRM_MA_ALLOW_HTTP', 'true')
+  vi.stubEnv('DSH_CRM_MA_ALLOW_UNAUTHENTICATED', 'true')
+  vi.stubEnv('DSH_CRM_LOYALTY_URL', `http://127.0.0.1:${(server.address() as AddressInfo).port}`)
+  vi.stubEnv('DSH_CRM_LOYALTY_ALLOW_HTTP', 'true')
+  vi.stubEnv('DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED', 'true')
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
   try {
     scaffold = await launchWebScaffold({
@@ -62,12 +68,16 @@ it('mounts the CRM example through the Web session controller', async () => {
     expect(names).toContain('crm_catalog')
     expect(names).toContain('crm_sales_report')
     expect(names).toEqual(expect.arrayContaining(['crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown']))
+    expect(names).toEqual(expect.arrayContaining(['crm_opportunity_catalog', 'crm_recommend_opportunities', 'crm_campaign_plan',
+      'crm_campaign_create_draft', 'crm_campaign_status', 'crm_campaign_results']))
     expect(names).not.toContain('bash')
     expect(names).not.toContain('str_replace_editor')
     const prompt = (await scaffold.ctx.systemPrompt.assemble({ scope: agent })).sections.map(section => section.text).join('\n')
     expect(prompt).toContain('crm_query 只用于标准周报或标准月报 Skill 中声明的旧固定流程')
     expect(prompt).toContain('临时走势、份额、排行、对比和下钻不得调用 crm_query')
     expect(prompt).toContain('crm_analyze 或 crm_drilldown')
+    expect(prompt).toContain('crm_campaign_plan')
+    expect(prompt).toContain('create_inactive_draft')
     const result = await scaffold.ctx.tools.execute({ agent, name: 'crm_catalog', arguments: {}, callId: ToolCallId('crm-web-catalog'), signal: new AbortController().signal })
     expect(result.isError).toBe(false)
     expect((result.value as { datasets: Array<{ name: string }> }).datasets.map(dataset => dataset.name))

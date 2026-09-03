@@ -49,8 +49,17 @@ const config = {
     rule: { kind: 'decline', metric: 'sales_amount', dimension: 'channel', threshold: 0.1 },
     primaryMetrics: ['sales_amount'], guardrailMetrics: ['order_count'], impactWeight: 0.8, riskWeight: 0.2,
     actionTemplate: '复核下降渠道。', audienceConditions: [{ kind: 'dimension_value', dimension: 'channel' }],
-    limitations: ['Aggregate evidence only.'],
+    audiencePolicyId: 'channel_policy', limitations: ['Aggregate evidence only.'],
   }] },
+  activation: {
+    policies: [{ id: 'channel_policy', opportunityId: 'channel_optimization', source: 'tag', key: 'preferred_channel',
+      operator: 'in', evidenceDimension: 'channel', valueMap: { 门店: 'STORE' }, mandatoryExclusions: [
+        { source: 'tag', key: 'marketing_consent', operator: 'equals', value: 'false' },
+      ], maxEstimatedSize: 1000, actionIds: ['sms_offer'] }],
+    canvas: { nodeTypes: { entry: 'AUDIENCE_ENTRY', condition: 'CONDITION', action: 'ACTION', end: 'END' },
+      connectorId: 'sequence', actions: [{ id: 'sms_offer', kind: 'ma_delivery', templateId: 'sms-template',
+        capabilityId: 'sms-capability' }] },
+  },
 }
 const env = { TEST_USER: 'fixture-user', TEST_PASSWORD: 'fixture-password' }
 const response = (aggregations: object = {}, hits: object[] = []) => ({ timed_out: false, _shards: { failed: 0 },
@@ -157,9 +166,15 @@ describe('CRM Elasticsearch reader', () => {
       const plugin = ctx.plugin(CrmTools, { ...config, endpoint })
       await plugin
       expect(ctx.tools.schemas().map(tool => tool.name)).toEqual([
-        'crm_catalog', 'crm_profile', 'crm_query', 'crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown',
+        'crm_catalog', 'crm_profile', 'crm_query', 'crm_metric_catalog', 'crm_opportunity_catalog',
+        'crm_recommend_opportunities', 'crm_campaign_plan', 'crm_campaign_create_draft', 'crm_campaign_status',
+        'crm_campaign_results', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown',
         'crm_report_periods', 'crm_sales_report', 'crm_lifecycle_report', 'crm_product_report', 'crm_export_weekly_excel',
       ])
+      const createDraftSchema = ctx.tools.schemas().find(tool => tool.name === 'crm_campaign_create_draft')
+      expect(createDraftSchema?.parameters).toEqual({ type: 'object',
+        required: ['planId', 'confirmation'], properties: { planId: { type: 'string' },
+          confirmation: { type: 'string', enum: ['create_inactive_draft'] } } })
       const semanticSchemas = ctx.tools.schemas().filter(tool => tool.name.startsWith('crm_') &&
         ['crm_metric_catalog', 'crm_dimension_catalog', 'crm_analyze', 'crm_drilldown'].includes(tool.name))
       expect(objectKeys(semanticSchemas)).not.toEqual(expect.arrayContaining(['index', 'field', 'script', 'formula', 'dsl', 'path']))

@@ -65,7 +65,17 @@ function text(value: unknown, name: string): string {
 
 /** Stateless MA transport whose callers can supply only resolved logical specs. */
 export class CrmMaHttpProvider implements CrmMaService {
-  constructor(private readonly config: ResolvedMaConfig, private readonly env: NodeJS.ProcessEnv) {}
+  private readonly config: ResolvedMaConfig
+  private readonly env: NodeJS.ProcessEnv
+
+  /** Create one bounded MA HTTP client.
+   * @param config Validated transport configuration.
+   * @param env Credential environment.
+   */
+  constructor(config: ResolvedMaConfig, env: NodeJS.ProcessEnv) {
+    this.config = config
+    this.env = env
+  }
 
   private async request(path: string, method: 'GET' | 'POST', body: JsonValue | undefined, signal: AbortSignal): Promise<unknown> {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)])

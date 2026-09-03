@@ -66,7 +66,17 @@ function count(value: unknown): number {
 
 /** Stateless LOYALTY reader with no mutation methods. */
 export class CrmLoyaltyHttpProvider implements CrmLoyaltyService {
-  constructor(private readonly config: ResolvedLoyaltyConfig, private readonly env: NodeJS.ProcessEnv) {}
+  private readonly config: ResolvedLoyaltyConfig
+  private readonly env: NodeJS.ProcessEnv
+
+  /** Create one bounded LOYALTY HTTP client.
+   * @param config Validated transport configuration.
+   * @param env Credential environment.
+   */
+  constructor(config: ResolvedLoyaltyConfig, env: NodeJS.ProcessEnv) {
+    this.config = config
+    this.env = env
+  }
   private async get(prefix: 'coupon' | 'activity', path: string, signal: AbortSignal): Promise<unknown> {
     const combined = AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)])
     try {
