@@ -42,6 +42,9 @@
       "path": "../../packages/core/session"
     },
     {
+      "path": "../../packages/examples/crm-campaign"
+    },
+    {
       "path": "../../packages/core/system-prompt"
     },
     {

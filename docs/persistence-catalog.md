@@ -382,6 +382,81 @@ Types: [ContentBlock](subsystems/core.md) · [TokenUsage](subsystems/llm-streami
 
 Source: [`packages/compaction/compaction/src/types.ts:33`](../packages/compaction/compaction/src/types.ts)
 
+### `crm-campaign/*`
+
+<a id="crm-campaignaudience-created--log-only"></a>
+
+#### `crm-campaign/audience-created` — log-only
+
+```ts persistence-catalog
+/**
+ * MA created or resolved the governed audience for an operation.
+ * @param key - deterministic operation identity
+ * @param audienceId - opaque MA audience identity
+ */
+'crm-campaign/audience-created': { key: CrmCampaignIdempotencyKey; audienceId: CrmMaAudienceId }
+```
+
+Source: [`packages/examples/crm-campaign/src/index.ts:30`](../packages/examples/crm-campaign/src/index.ts)
+
+<a id="crm-campaigndraft-created--log-only"></a>
+
+#### `crm-campaign/draft-created` — log-only
+
+```ts persistence-catalog
+/**
+ * MA created or resolved the inactive campaign draft for an operation.
+ * @param key - deterministic operation identity
+ * @param audienceId - opaque MA audience identity
+ * @param campaignId - opaque MA campaign identity
+ * @param status - inactive-only lifecycle state
+ */
+'crm-campaign/draft-created': {
+  key: CrmCampaignIdempotencyKey
+  audienceId: CrmMaAudienceId
+  campaignId: CrmMaCampaignId
+  status: 'inactive'
+}
+```
+
+Source: [`packages/examples/crm-campaign/src/index.ts:38`](../packages/examples/crm-campaign/src/index.ts)
+
+<a id="crm-campaigndraft-failed--log-only"></a>
+
+#### `crm-campaign/draft-failed` — log-only
+
+```ts persistence-catalog
+/**
+ * A bounded failure ended one operation stage without deleting remote data.
+ * @param key - deterministic operation identity
+ * @param stage - stage that failed
+ * @param code - bounded retry or reconciliation outcome
+ */
+'crm-campaign/draft-failed': {
+  key: CrmCampaignIdempotencyKey
+  stage: 'validation' | 'audience' | 'campaign'
+  code: 'FAILED' | 'AMBIGUOUS' | 'MANUAL_RECONCILIATION'
+}
+```
+
+Source: [`packages/examples/crm-campaign/src/index.ts:50`](../packages/examples/crm-campaign/src/index.ts)
+
+<a id="crm-campaigndraft-started--log-only"></a>
+
+#### `crm-campaign/draft-started` — log-only
+
+```ts persistence-catalog
+/**
+ * A confirmed draft operation began before any remote write.
+ * @param key - deterministic operation identity
+ * @param planId - current-session plan identity
+ * @param inputDigest - digest of the resolved governed inputs
+ */
+'crm-campaign/draft-started': { key: CrmCampaignIdempotencyKey; planId: CrmCampaignPlanId; inputDigest: string }
+```
+
+Source: [`packages/examples/crm-campaign/src/index.ts:24`](../packages/examples/crm-campaign/src/index.ts)
+
 ### `feedback/*`
 
 <a id="feedbackrecord--log-only"></a>

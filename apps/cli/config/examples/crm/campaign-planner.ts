@@ -77,7 +77,12 @@ function triggeringValues(definition: OpportunityDefinition, evidence: Recommend
   }).map(row => String(row.dimensions[rule.dimension]))
 }
 
-function planIdFor(recommendationId: string, audience: CampaignAudiencePreview): string {
+/** Recompute a campaign-plan identity when validating persisted metadata.
+ * @param recommendationId Source recommendation identity.
+ * @param audience Aggregate audience preview.
+ * @returns Stable opaque plan identity.
+ */
+export function campaignPlanIdFor(recommendationId: string, audience: CampaignAudiencePreview): string {
   return `plan_${createHash('sha256').update(JSON.stringify({ version: 1, recommendationId, audience })).digest('base64url')}`
 }
 
@@ -118,7 +123,7 @@ async function createPlan(
   }
   const audiencePreview = Object.freeze({ conditions: Object.freeze(definition.audienceConditions.map(item => Object.freeze({ ...item }))),
     ...(estimatedCount === undefined ? {} : { estimatedCount }), unavailableReasons: Object.freeze([...reasons]) })
-  return Object.freeze({ version: 1, planId: planIdFor(recommendation.recommendationId, audiencePreview),
+  return Object.freeze({ version: 1, planId: campaignPlanIdFor(recommendation.recommendationId, audiencePreview),
     recommendationId: recommendation.recommendationId, status: 'preview', readyForCreation: reasons.length === 0,
     readinessReasons: Object.freeze(reasons), audiencePreview, actionTemplate: definition.actionTemplate,
     primaryMetrics: Object.freeze([...definition.primaryMetrics]), guardrailMetrics: Object.freeze([...definition.guardrailMetrics]),
