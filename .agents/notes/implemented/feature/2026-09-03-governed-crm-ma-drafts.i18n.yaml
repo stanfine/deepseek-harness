@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-03-governed-crm-ma-drafts.md
-2026-09-03-governed-crm-ma-drafts.md: c4916b04ae39004735d770583927b37907d83e03
-2026-09-03-governed-crm-ma-drafts.zh.md: 3be1bef8cc6488d70f25a786edd8b6710de80d37
+2026-09-03-governed-crm-ma-drafts.md: 5eb1bee0318195624f161236d94d8875813698f7
+2026-09-03-governed-crm-ma-drafts.zh.md: bb2ec1423024ba50c283b6ef0d1c2390478660c6

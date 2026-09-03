@@ -4,13 +4,10 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import { recommendationIdFor, type AnalyzeOpportunity, type OpportunityRequest,
   type RecommendationEvidence, type RecommendationV1 } from './opportunity-evaluator.ts'
 import type { AudienceCondition, MarketingModel, OpportunityDefinition } from './marketing-model.ts'
-import type { CdpTagCatalogItem } from './cdp-service.ts'
 import type { MaCatalogItem } from './ma-service.ts'
 
 /** Live-system activation values selected and validated before planning. */
 export interface CampaignActivation {
-  audienceTag: CdpTagCatalogItem
-  exclusionTags: readonly CdpTagCatalogItem[]
   group: MaCatalogItem
   category: MaCatalogItem
   content: MaCatalogItem & { flowNodeId: string }

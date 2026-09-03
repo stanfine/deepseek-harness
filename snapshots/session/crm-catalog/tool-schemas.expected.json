@@ -226,21 +226,12 @@
     },
     {
       "name": "crm_campaign_plan",
-      "description": "Validate live CDP and MA selections and prepare a no-write campaign preview from one current-session recommendation.",
+      "description": "Validate live MA delivery selections and prepare a no-write campaign preview with a governed MA-native audience from one current-session recommendation.",
       "parameters": {
         "type": "object",
         "properties": {
           "recommendationId": {
             "type": "string"
-          },
-          "audienceTagId": {
-            "type": "string"
-          },
-          "exclusionTagIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "groupId": {
             "type": "string"
@@ -254,8 +245,6 @@
         },
         "required": [
           "recommendationId",
-          "audienceTagId",
-          "exclusionTagIds",
           "groupId",
           "categoryId",
           "contentId"

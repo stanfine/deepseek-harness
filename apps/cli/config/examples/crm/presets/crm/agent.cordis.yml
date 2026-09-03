@@ -11,7 +11,7 @@
       默认生成图表与文字结合的会话内报告。用户要求 Excel 时，先完成标准周报取数和有证据的建议，再调用 crm_export_weekly_excel，并在最终答复中使用工具返回的 downloadUrl 输出“下载 Excel”链接。未指定周期时先说明所需日期并询问。
       crm_query 只用于标准周报或标准月报 Skill 中声明的旧固定流程。临时走势、份额、排行、对比和下钻不得调用 crm_query，只能先查语义目录，再调用 crm_analyze 或 crm_drilldown。
       完整月报包含核心汇总、本月日趋势、渠道结构和门店排行；不适用或无法取数的部分说明原因，不以重复指标卡代替图表。
-      营销活动必须先调用 crm_recommend_opportunities 给出有证据的建议，并用 crm_activation_catalog 从当前 MA 和 CDP 系统查询可用分组、分类、内容和人群标签；不得自行编造或硬编码外部 id。把目录返回的目标标签、排除标签、分组、分类和内容 id 传给 crm_campaign_plan，由当前工程再次查询并校验这些 id，再展示人群条件、预计规模、动作、指标、限制和创建就绪状态。只有用户明确要求创建并已审阅计划后，才可用该计划返回的 planId 调用 crm_campaign_create_draft；confirmation 必须固定为 create_inactive_draft。创建结果只能是未启动草稿，不得启动、审批、发送、发券或删除。活动状态和汇总触达结果分别使用 crm_campaign_status 与 crm_campaign_results。
+      营销活动必须先调用 crm_recommend_opportunities 给出有证据的建议，并用 crm_activation_catalog 查询当前 MA 的可用分组、分类和内容；不得自行编造或硬编码外部 id。把目录返回的分组、分类和内容 id 传给 crm_campaign_plan；当前工程根据已记录证据和受治理策略构造新的 MA 人群，再次查询并校验 MA id，并展示人群条件、预计规模、动作、指标、限制和创建就绪状态。CDP 标签不是活动计划的前置条件。只有用户明确要求创建并已审阅计划后，才可用该计划返回的 planId 调用 crm_campaign_create_draft；confirmation 必须固定为 create_inactive_draft。创建结果只能是未启动草稿，不得启动、审批、发送、发券或删除。活动状态和汇总触达结果分别使用 crm_campaign_status 与 crm_campaign_results。
 
 - id: crm-tools
   name: ../../crm-tools.ts
@@ -369,12 +369,12 @@
       policies:
         - id: channel_policy
           opportunityId: channel_optimization
-          source: tag
-          key: preferred_channel
+          source: field
+          key: channelId
           operator: in
           evidenceDimension: item_channel
-          valueMap: { 门店: STORE, 线上: ONLINE, 小程序: MINI_PROGRAM }
-          mandatoryExclusions: [{ source: tag, key: marketing_consent, operator: equals, value: 'false' }]
+          valueMap: { pos: pos, tmall: tmall, ec: ec, yt: yt }
+          mandatoryExclusions: [{ source: field, key: status, operator: equals, value: DELETED }]
           maxEstimatedSize: 100000
           actionIds: [sms_offer]
       canvas:

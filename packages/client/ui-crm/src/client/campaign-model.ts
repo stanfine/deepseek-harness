@@ -16,6 +16,8 @@ interface PlanCard {
   primaryMetrics: string[]
   guardrailMetrics: string[]
   limitations: string[]
+  activation: { group: { name: string }; category: { name: string }; content: { name: string } }
+  canvas: { nodes: Array<{ id: string; type: string }>; edges: Array<{ source: string; target: string }> }
 }
 interface DraftCard { planId: string; campaignId: string; audienceId: string; status: 'inactive'; created: boolean; warnings: string[] }
 interface StatusCard { id: string; status: string; started: boolean; archived: boolean }
@@ -45,6 +47,26 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): boolean
   return Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key))
 }
 
+function catalogItem(value: unknown, kind: string): value is Record<string, unknown> {
+  return object(value) && typeof value.id === 'string' && typeof value.name === 'string'
+    && value.kind === kind && value.enabled === true
+}
+
+function activation(value: unknown): boolean {
+  return object(value) && exact(value, ['group', 'category', 'content'])
+    && catalogItem(value.group, 'group') && catalogItem(value.category, 'category')
+    && catalogItem(value.content, 'content') && typeof value.content.flowNodeId === 'string'
+}
+
+function canvas(value: unknown): boolean {
+  if (!object(value) || !exact(value, ['nodes', 'edges']) || !Array.isArray(value.nodes) || value.nodes.length !== 4
+    || !Array.isArray(value.edges) || value.edges.length !== 3) return false
+  return value.nodes.every(node => object(node) && exact(node, ['id', 'type', 'config'])
+    && typeof node.id === 'string' && typeof node.type === 'string' && object(node.config))
+    && value.edges.every(edge => object(edge) && exact(edge, ['id', 'source', 'target', 'connectorId'])
+      && typeof edge.source === 'string' && typeof edge.target === 'string')
+}
+
 /** Read one bounded CRM campaign presentation.
  * @param meta Persisted tool-result metadata.
  * @returns A safe campaign view or null.
@@ -66,14 +88,15 @@ export function readCampaign(meta: unknown): CampaignView | null {
     && meta.crmCampaignPlan.version === 1 && object(meta.crmCampaignPlan.data)) {
     const data = meta.crmCampaignPlan.data
     if (!exact(data, ['version', 'planId', 'recommendationId', 'status', 'readyForCreation', 'readinessReasons',
-      'audiencePreview', 'actionTemplate', 'primaryMetrics', 'guardrailMetrics', 'limitations'])
+      'audiencePreview', 'activation', 'canvas', 'actionTemplate', 'primaryMetrics', 'guardrailMetrics', 'limitations'])
       || typeof data.planId !== 'string' || typeof data.readyForCreation !== 'boolean' || !strings(data.readinessReasons)
       || !object(data.audiencePreview) || !Array.isArray(data.audiencePreview.conditions)
       || !exact(data.audiencePreview, data.audiencePreview.estimatedCount === undefined
         ? ['conditions', 'unavailableReasons'] : ['conditions', 'estimatedCount', 'unavailableReasons'])
       || data.audiencePreview.estimatedCount !== undefined && !finite(data.audiencePreview.estimatedCount)
       || !strings(data.audiencePreview.unavailableReasons) || typeof data.actionTemplate !== 'string'
-      || !strings(data.primaryMetrics) || !strings(data.guardrailMetrics) || !strings(data.limitations)) return null
+      || !activation(data.activation) || !canvas(data.canvas) || !strings(data.primaryMetrics)
+      || !strings(data.guardrailMetrics) || !strings(data.limitations)) return null
     return { kind: 'plan', data: data as unknown as PlanCard }
   }
   if (!object(meta.crmCampaign) || !exact(meta.crmCampaign, ['version', 'kind', 'data'])

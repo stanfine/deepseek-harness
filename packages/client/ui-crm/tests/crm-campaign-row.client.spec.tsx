@@ -23,6 +23,24 @@ it('renders an inactive draft with opaque external ids', () => {
   expect(screen.queryByRole('button', { name: /启动|发送|审批/ })).toBeNull()
 })
 
+it('renders the reviewed MA selections and campaign canvas', () => {
+  render(<CrmCampaignRow {...props({ crmCampaignPlan: { version: 1, data: { version: 1, planId: 'plan_abc',
+    recommendationId: 'rec_abc', status: 'preview', readyForCreation: true, readinessReasons: [],
+    audiencePreview: { conditions: [{ kind: 'dimension_value' }], estimatedCount: 42, unavailableReasons: [] },
+    actionTemplate: '发送配置模板', primaryMetrics: ['sales_amount'], guardrailMetrics: ['atv'], limitations: [],
+    activation: { group: { id: 'group', name: '营销活动', kind: 'group', enabled: true },
+      category: { id: 'category', name: '分类', kind: 'category', enabled: true },
+      content: { id: 'content', name: '推荐商品', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } },
+    canvas: { nodes: [{ id: 'entry', type: 'START', config: {} }, { id: 'audience', type: 'AUDIENCE', config: {} },
+      { id: 'action', type: 'ACTION', config: {} }, { id: 'end', type: 'END', config: {} }],
+    edges: [{ id: 'e1', source: 'entry', target: 'audience', connectorId: 'sequence' },
+      { id: 'e2', source: 'audience', target: 'action', connectorId: 'sequence' },
+      { id: 'e3', source: 'action', target: 'end', connectorId: 'sequence' }] } } } })} />)
+  expect(screen.getByText('活动画布')).toBeTruthy()
+  expect(screen.getByText('START → AUDIENCE → ACTION → END')).toBeTruthy()
+  expect(screen.getByText(/营销活动.*分类.*推荐商品/)).toBeTruthy()
+})
+
 it('falls back to raw output for an active campaign draft', () => {
   render(<CrmCampaignRow {...props({ crmCampaign: { version: 1, kind: 'draft', data: { version: 1,
     planId: 'plan_abc', idempotencyKey: 'draft_abc', campaignId: 'campaign-1', audienceId: 'audience-1',

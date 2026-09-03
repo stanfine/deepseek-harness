@@ -6,11 +6,9 @@ import { campaignPlanIdFor } from '../config/examples/crm/campaign-planner.ts'
 
 const audiencePreview = { conditions: [{ kind: 'dimension_value', dimension: 'channel' }], estimatedCount: 42,
   unavailableReasons: [] }
-const activation = { audienceTag: { id: 'target', code: 'target', name: 'Target', fullName: 'Target' }, exclusionTags: [
-  { id: 'blocked', code: 'blocked', name: 'Blocked', fullName: 'Blocked' },
-], group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
-category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
-content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
+const activation = { group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
+  category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
+  content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
 const plan = { version: 1, planId: campaignPlanIdFor('rec_abc', audiencePreview as never, activation as never), recommendationId: 'rec_abc',
   status: 'preview', readyForCreation: true, readinessReasons: [], audiencePreview, actionTemplate: 'Offer',
   activation, primaryMetrics: ['sales_amount'], guardrailMetrics: ['atv'], limitations: [] }

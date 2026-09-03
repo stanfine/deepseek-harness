@@ -11,11 +11,9 @@ const definition = { id: 'channel_decline', title: 'Optimize channel', dataset: 
   limitations: ['Aggregate evidence only.'] }
 
 const model = { opportunityCatalog: () => [{ ...definition, available: true }], resolveOpportunity: () => definition }
-const activation = { audienceTag: { id: 'target', code: 'target', name: 'Target', fullName: 'Target' }, exclusionTags: [
-  { id: 'blocked', code: 'blocked', name: 'Blocked', fullName: 'Blocked' },
-], group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
-category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
-content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
+const activation = { group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
+  category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
+  content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' } }
 
 function evidence(metrics = { sales_amount: { value: 70, comparisonValue: 100, changeRatio: -0.3 },
   atv: { value: 7, comparisonValue: 10, changeRatio: -0.3 } }) {

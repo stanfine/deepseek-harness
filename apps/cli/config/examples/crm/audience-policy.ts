@@ -3,7 +3,6 @@ import type { ResolvedMaAudience } from './ma-service.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { MarketingModel } from './marketing-model.ts'
 import type { RecommendationV1 } from './opportunity-evaluator.ts'
-import type { CampaignActivation } from './campaign-planner.ts'
 
 /** Closed audience condition source. */
 export type AudienceSource = 'tag' | 'field'
@@ -30,6 +29,7 @@ export interface AudiencePolicyConfig { policies: AudiencePolicyDefinition[] }
 export type ResolvedAudiencePolicies = ReadonlyMap<string, Readonly<AudiencePolicyDefinition>>
 
 const id = /^[a-z][a-z0-9_]*$/
+const fieldPath = /^[A-Za-z][A-Za-z0-9_.]*$/
 function exact(value: object, keys: readonly string[], message: string): void {
   if (Object.keys(value).some(key => !keys.includes(key))) throw new Error(message)
 }
@@ -52,13 +52,15 @@ export function resolveAudiencePolicy(config: AudiencePolicyConfig, marketing: M
       throw new Error('Unknown audience policy opportunity')
     }
     if (!['tag', 'field'].includes(policy.source) || !['equals', 'in'].includes(policy.operator)) throw new Error('Invalid audience operator')
-    if (!id.test(policy.key) || !id.test(policy.evidenceDimension) || Object.keys(policy.valueMap).length === 0
+    if (!(policy.source === 'field' ? fieldPath : id).test(policy.key) || !id.test(policy.evidenceDimension)
+      || Object.keys(policy.valueMap).length === 0
       || Object.values(policy.valueMap).some(value => !value.trim())) throw new Error('Invalid audience evidence mapping')
     if (!Array.isArray(policy.mandatoryExclusions) || policy.mandatoryExclusions.length === 0) throw new Error('Audience exclusion is required')
     for (const exclusion of policy.mandatoryExclusions) {
       exact(exclusion, ['source', 'key', 'operator', 'value'], 'Invalid audience exclusion keys')
       if (!['tag', 'field'].includes(exclusion.source) || exclusion.operator !== 'equals'
-        || !id.test(exclusion.key) || !exclusion.value.trim()) throw new Error('Invalid audience exclusion')
+        || !(exclusion.source === 'field' ? fieldPath : id).test(exclusion.key)
+        || !exclusion.value.trim()) throw new Error('Invalid audience exclusion')
     }
     if (!Number.isSafeInteger(policy.maxEstimatedSize) || policy.maxEstimatedSize <= 0
       || !Array.isArray(policy.actionIds) || policy.actionIds.length === 0) throw new Error('Invalid audience policy limits')
@@ -92,27 +94,5 @@ export function buildMaAudience(
   return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
     selectType: 'CONDITION', usageType: 'CAMPAIGN',
     filter: Object.freeze({ all: Object.freeze(all.map(item => Object.freeze(item))) }) as unknown as JsonValue,
-    setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })
-}
-
-/** Build an MA audience from CDP tags validated and recorded by campaign planning.
- * @param policy Governed size and opportunity policy.
- * @param recommendation Recorded recommendation.
- * @param planId Current campaign plan identity.
- * @param activation Validated live-system selection.
- * @param estimatedSize Optional aggregate estimate.
- * @returns Immutable resolved MA audience.
- */
-export function buildMaTagAudience(
-  policy: Readonly<AudiencePolicyDefinition>, recommendation: RecommendationV1, planId: string,
-  activation: CampaignActivation, estimatedSize?: number,
-): ResolvedMaAudience {
-  if (recommendation.opportunityId !== policy.opportunityId) throw new Error('Audience policy opportunity mismatch')
-  if (estimatedSize !== undefined && estimatedSize > policy.maxEstimatedSize) throw new Error('Audience exceeds configured maximum')
-  const all = [{ source: 'tag' as const, key: 'tag', operator: 'equals' as const, values: [activation.audienceTag.id] },
-    ...activation.exclusionTags.map(item => ({ source: 'tag' as const, key: 'tag', operator: 'not_equals' as const,
-      values: [item.id] }))]
-  return Object.freeze({ id: `aud_${planId}`, name: `CRM ${recommendation.title}`, description: recommendation.actionTemplate,
-    selectType: 'CONDITION', usageType: 'CAMPAIGN', filter: Object.freeze({ all: Object.freeze(all) }) as unknown as JsonValue,
     setting: Object.freeze({ dwhType: 'MA' }), extra: Object.freeze({ planId, policyId: policy.id }) })
 }

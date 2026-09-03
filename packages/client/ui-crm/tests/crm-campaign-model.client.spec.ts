@@ -5,7 +5,16 @@ import { readCampaign } from '../src/client/campaign-model.ts'
 const plan = { crmCampaignPlan: { version: 1, data: { version: 1, planId: 'plan_abc', recommendationId: 'rec_abc', status: 'preview', readyForCreation: true,
   readinessReasons: [], audiencePreview: { conditions: [{ kind: 'dimension_value' }], estimatedCount: 42,
     unavailableReasons: [] }, actionTemplate: '发送配置模板', primaryMetrics: ['sales_amount'],
-  guardrailMetrics: ['atv'], limitations: ['仅汇总证据'] } } }
+  guardrailMetrics: ['atv'], limitations: ['仅汇总证据'], activation: {
+    group: { id: 'group', name: 'Group', kind: 'group', enabled: true },
+    category: { id: 'category', name: 'Category', kind: 'category', enabled: true },
+    content: { id: 'content', name: 'Content', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' },
+  }, canvas: { nodes: [{ id: 'entry', type: 'START', config: {} }, { id: 'audience', type: 'AUDIENCE', config: {} },
+    { id: 'action', type: 'ACTION', config: {} }, { id: 'end', type: 'END', config: {} }], edges: [
+    { id: 'e1', source: 'entry', target: 'audience', connectorId: 'sequence' },
+    { id: 'e2', source: 'audience', target: 'action', connectorId: 'sequence' },
+    { id: 'e3', source: 'action', target: 'end', connectorId: 'sequence' },
+  ] } } } }
 
 describe('CRM campaign metadata', () => {
   it('accepts governed previews and inactive drafts', () => {

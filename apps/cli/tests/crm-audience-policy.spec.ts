@@ -29,6 +29,13 @@ describe('CRM audience policy', () => {
     expect(Object.isFrozen(audience)).toBe(true)
   })
 
+  it('accepts deployed MA field paths in field-backed policies', () => {
+    const configured = config()
+    configured.policies[0] = { ...configured.policies[0]!, source: 'field', key: 'registerChannel.channelId' }
+    expect(resolveAudiencePolicy(configured as never, marketing as never).get('channel_optimization')?.key)
+      .toBe('registerChannel.channelId')
+  })
+
   it.each([
     ['unknown keys', () => ({ ...config(), script: 'x' }), /configuration keys/],
     ['unknown opportunity', () => ({ policies: [{ ...config().policies[0]!, opportunityId: 'missing' }] }), /opportunity/],

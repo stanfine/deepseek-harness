@@ -23,6 +23,8 @@
 .definitions dd span, .cellReason { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); }
 .chart { width: 100%; height: 340px; min-width: 0; margin: 12px 0; }
 .warning { color: var(--dsw-alias-label-primary); border-left: 3px solid var(--dsw-alias-label-secondary); padding-left: 12px; }
+.canvas { margin: 12px 0; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
+.canvas p { margin: 8px 0 0; overflow-wrap: anywhere; }
 .tableWrap { overflow: auto; max-height: 260px; }
 .tableWrap table { width: 100%; border-collapse: collapse; }
 .tableWrap th, .tableWrap td { text-align: left; padding: 8px; border-bottom: 1px solid var(--dsw-alias-border-l2); overflow-wrap: anywhere; }
