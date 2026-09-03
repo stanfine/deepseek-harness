@@ -10,8 +10,9 @@ import { buildMaAudience, resolveAudiencePolicy, type AudiencePolicyConfig } fro
 import { buildSinglePathCanvas, resolveCanvasConfig, type CampaignAction, type CanvasConfig } from './campaign-canvas.ts'
 import { createCampaignPlan, findRecommendation } from './campaign-planner.ts'
 import { createCampaignDraft, findCampaignPlan } from './campaign-draft-creator.ts'
+import { collectCampaignResults, findRecordedCampaign } from './campaign-results.ts'
 import { evaluateOpportunities } from './opportunity-evaluator.ts'
-import type { CrmMaService, MaCampaignId, ResolvedMaCampaign } from './ma-service.ts'
+import type { CrmMaService, ResolvedMaCampaign } from './ma-service.ts'
 import type { CrmLoyaltyService } from './loyalty-service.ts'
 import { resolveAnalysisPlan, type AnalysisRequest, type DrilldownRequest } from './analysis-planner.ts'
 import { CRM_ANALYSIS_MAX_BYTES, executeSemanticAnalysis, type SemanticAnalysisResultV1 } from './semantic-analysis.ts'
@@ -383,19 +384,22 @@ export function apply(ctx: Context, config: CrmConfig): void {
   })))
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'crm_campaign_status', description: 'Read aggregate lifecycle status for an MA campaign.',
-    parameters: { campaignId: { type: 'string', required: true } }, output: campaignOutput('status'),
+    parameters: { planId: { type: 'string', required: true } }, output: campaignOutput('status'),
     async execute(args, exec) {
+      if (!exec.agent) throw new Error('CRM campaign status requires an agent session')
       if (!ma) throw new Error('CRM MA service is unavailable')
-      return json(await ma.campaignStatus(args.campaignId as MaCampaignId, exec.signal))
+      return json(await ma.campaignStatus(findRecordedCampaign(exec.agent.session, args.planId), exec.signal))
     },
   })))
   ctx.effect(() => ctx.tools.register(defineTool({
-    name: 'crm_campaign_results', description: 'Read aggregate reach results for an MA campaign in a closed date range.',
-    parameters: { campaignId: { type: 'string', required: true }, start: { type: 'string', required: true },
+    name: 'crm_campaign_results', description: 'Collect partial-safe aggregate MA and configured LOYALTY results for a current-session campaign plan.',
+    parameters: { planId: { type: 'string', required: true }, start: { type: 'string', required: true },
       end: { type: 'string', required: true } }, output: campaignOutput('results'),
     async execute(args, exec) {
+      if (!exec.agent) throw new Error('CRM campaign results require an agent session')
       if (!ma) throw new Error('CRM MA service is unavailable')
-      return json(await ma.reachSummary(args.campaignId as MaCampaignId, args.start, args.end, exec.signal))
+      return json(await collectCampaignResults(exec.agent.session, args.planId, { start: args.start, end: args.end },
+        { holdoutConfigured: false }, ma, loyalty, exec.signal))
     },
   })))
   ctx.effect(() => ctx.tools.register(defineTool({

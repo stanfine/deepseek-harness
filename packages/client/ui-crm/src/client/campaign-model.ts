@@ -17,12 +17,23 @@ interface PlanCard {
   guardrailMetrics: string[]
   limitations: string[]
 }
+interface DraftCard { planId: string; campaignId: string; audienceId: string; status: 'inactive'; created: boolean; warnings: string[] }
+interface StatusCard { id: string; status: string; started: boolean; archived: boolean }
+interface ResultsCard {
+  planId: string
+  campaignId: string
+  period: { start: string; end: string }
+  ma: { available: boolean; data?: { reachPeople: number; channels: Array<{ channel: string; count: number }> }; reason?: string }
+  loyalty: { available: boolean; reason?: string }
+  conversion: { available: false; reason: string }
+  incrementality: { available: false; reason: string }
+}
 export type CampaignView =
   | { kind: 'recommendations'; data: { recommendations: RecommendationCard[] } }
   | { kind: 'plan'; data: PlanCard }
-  | { kind: 'draft'; data: { planId: string; campaignId: string; audienceId: string; status: 'inactive'; created: boolean; warnings: string[] } }
-  | { kind: 'status'; data: { id: string; status: string; started: boolean; archived: boolean } }
-  | { kind: 'results'; data: { reachPeople: number; channels: Array<{ channel: string; count: number }> } }
+  | { kind: 'draft'; data: DraftCard }
+  | { kind: 'status'; data: StatusCard }
+  | { kind: 'results'; data: ResultsCard }
 
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -75,9 +86,20 @@ export function readCampaign(meta: unknown): CampaignView | null {
   if (kind === 'status' && exact(data, ['id', 'status', 'started', 'archived'])
     && typeof data.id === 'string' && typeof data.status === 'string'
     && typeof data.started === 'boolean' && typeof data.archived === 'boolean') return { kind, data } as CampaignView
-  if (kind === 'results' && exact(data, ['reachPeople', 'channels'])
-    && Number.isSafeInteger(data.reachPeople) && (data.reachPeople as number) >= 0 && Array.isArray(data.channels)
-    && data.channels.length <= 100 && data.channels.every(row => object(row) && typeof row.channel === 'string'
-      && Number.isSafeInteger(row.count) && (row.count as number) >= 0)) return { kind, data } as CampaignView
+  if (kind === 'results' && exact(data, ['version', 'planId', 'campaignId', 'period', 'ma', 'loyalty', 'conversion', 'incrementality'])
+    && data.version === 1 && typeof data.planId === 'string' && typeof data.campaignId === 'string'
+    && object(data.period) && exact(data.period, ['start', 'end']) && typeof data.period.start === 'string'
+    && typeof data.period.end === 'string' && object(data.ma) && typeof data.ma.available === 'boolean'
+    && object(data.loyalty) && typeof data.loyalty.available === 'boolean' && object(data.conversion)
+    && data.conversion.available === false && typeof data.conversion.reason === 'string' && object(data.incrementality)
+    && data.incrementality.available === false && typeof data.incrementality.reason === 'string') {
+    if (data.ma.available && (!exact(data.ma, ['available', 'data']) || !object(data.ma.data)
+      || !Number.isSafeInteger(data.ma.data.reachPeople) || (data.ma.data.reachPeople as number) < 0
+      || !Array.isArray(data.ma.data.channels) || data.ma.data.channels.length > 100
+      || !data.ma.data.channels.every(row => object(row) && exact(row, ['channel', 'count'])
+        && typeof row.channel === 'string' && Number.isSafeInteger(row.count) && (row.count as number) >= 0))) return null
+    if (!data.ma.available && (!exact(data.ma, ['available', 'reason']) || typeof data.ma.reason !== 'string')) return null
+    return { kind, data } as CampaignView
+  }
   return null
 }

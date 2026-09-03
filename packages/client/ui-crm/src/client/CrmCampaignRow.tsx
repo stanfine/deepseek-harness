@@ -26,7 +26,11 @@ export function CrmCampaignRow({ block, t, inspect }: Props) {
     {view.kind === 'plan' && <><dl className={css.metrics}><div><dt>{t('campaignAudience')}</dt><dd>{view.data.audiencePreview.estimatedCount?.toLocaleString() ?? '—'}</dd></div><div><dt>{t('campaignReady')}</dt><dd>{view.data.readyForCreation ? t('yes') : t('no')}</dd></div></dl><p>{view.data.actionTemplate}</p>{[...view.data.readinessReasons, ...view.data.limitations].map(text => <p className={css.warning} key={text}>{text}</p>)}</>}
     {view.kind === 'draft' && <><p><strong>{t('campaignInactive')}</strong></p><p>{t('campaignId')}: {view.data.campaignId}</p><p>{t('campaignAudienceId')}: {view.data.audienceId}</p></>}
     {view.kind === 'status' && <dl className={css.metrics}><div><dt>{t('campaignStatus')}</dt><dd>{view.data.status}</dd></div><div><dt>{t('campaignStarted')}</dt><dd>{view.data.started ? t('yes') : t('no')}</dd></div></dl>}
-    {view.kind === 'results' && <><dl className={css.metrics}><div><dt>{t('campaignReach')}</dt><dd>{view.data.reachPeople.toLocaleString()}</dd></div></dl>{view.data.channels.map(row => <p key={row.channel}>{row.channel}: {row.count.toLocaleString()}</p>)}</>}
+    {view.kind === 'results' && <>{view.data.ma.available && view.data.ma.data
+      ? <><dl className={css.metrics}><div><dt>{t('campaignReach')}</dt><dd>{view.data.ma.data.reachPeople.toLocaleString()}</dd></div></dl>{view.data.ma.data.channels.map(row => <p key={row.channel}>{row.channel}: {row.count.toLocaleString()}</p>)}</>
+      : <p className={css.warning}>{view.data.ma.reason}</p>}
+    <p className={css.warning}>{view.data.conversion.reason}</p>
+    <p className={css.warning}>{view.data.incrementality.reason}</p></>}
     <details><summary>{t('raw')}</summary><pre className={css.raw}>{raw}</pre></details>
   </section>
 }
