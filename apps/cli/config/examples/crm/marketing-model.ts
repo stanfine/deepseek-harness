@@ -38,6 +38,7 @@ export interface OpportunityDefinition {
   riskWeight: number
   actionTemplate: string
   audienceConditions: AudienceCondition[]
+  audienceEstimateMetric?: string
   audiencePolicyId?: string
   requiredConcepts?: MemberConcept[]
   limitations: string[]
@@ -140,7 +141,8 @@ export function resolveMarketingModel(config: MarketingConfig, semantic: Resolve
   const definitions = new Map<string, OpportunityDefinition>()
   for (const value of config.opportunities) {
     exactKeys(value, ['id', 'title', 'dataset', 'comparison', 'rule', 'primaryMetrics', 'guardrailMetrics', 'impactWeight', 'riskWeight',
-      'actionTemplate', 'audienceConditions', 'audiencePolicyId', 'requiredConcepts', 'limitations'], 'opportunity definition')
+      'actionTemplate', 'audienceConditions', 'audienceEstimateMetric', 'audiencePolicyId', 'requiredConcepts', 'limitations'],
+    'opportunity definition')
     if (!ids.test(value.id) || !value.title.trim() || !value.actionTemplate.trim() || !value.dataset.trim()) throw new Error('Invalid opportunity definition')
     if (definitions.has(value.id)) throw new Error(`Duplicate opportunity id ${value.id}`)
     if (!comparisons.has(value.comparison)) throw new Error('Invalid opportunity comparison')
@@ -158,6 +160,9 @@ export function resolveMarketingModel(config: MarketingConfig, semantic: Resolve
       || !Number.isFinite(value.riskWeight) || value.riskWeight < 0 || value.riskWeight > 1) throw new Error('Invalid opportunity weight')
     if (!Array.isArray(value.audienceConditions)) throw new Error('Invalid audience conditions')
     value.audienceConditions.forEach(validateAudience)
+    if (value.audienceEstimateMetric !== undefined && metricDataset(semantic, value.audienceEstimateMetric) !== value.dataset) {
+      throw new Error('Cross-dataset audience estimate metric')
+    }
     if (value.audiencePolicyId !== undefined && !ids.test(value.audiencePolicyId)) throw new Error('Invalid audience policy id')
     const hasMemberAudience = value.audienceConditions.some(condition => condition.kind === 'member_segment')
     const concepts = new Set(value.requiredConcepts ?? [])

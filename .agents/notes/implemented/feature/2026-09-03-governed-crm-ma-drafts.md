@@ -18,6 +18,8 @@ Campaign status and result tools resolve external ids from the current session. 
 
 `crm_activation_catalog` reads bounded safe projections from the configured MA and CDP systems. The Agent passes selected target tag, exclusion tag, group, category, and content ids to `crm_campaign_plan`. Planning queries the live catalogs again, rejects missing or disabled entries, requires the content's MA flow-node capability, and includes the safe resolved values in the plan digest. Draft creation consumes only that recorded selection. Catalog reads never return tag conditions or customer records.
 
+The production channel opportunity uses the same order-item source that supports the covered weekly reporting period. Its governed audience estimate metric is explicit because a generic purchaser metric can belong to a different dataset. MA catalog limits apply independently to groups, categories, and content so one large kind cannot hide the others.
+
 ## Alternatives considered
 
 - **Let the model generate MA JSON and canvas options** — this moves customer selection and execution behavior outside deployment review.

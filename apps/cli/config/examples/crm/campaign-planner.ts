@@ -128,10 +128,11 @@ async function createPlan(
     const values = triggeringValues(definition, recommendation.evidence[0]!)
     if (values.length === 0) reasons.push('No governed audience values were supported by the evidence')
     else {
-      const result = await analyze({ metrics: ['purchaser_count'], filters: [{ dimension: condition.dimension, operator: 'in', values }],
+      const audienceMetric = definition.audienceEstimateMetric ?? 'purchaser_count'
+      const result = await analyze({ metrics: [audienceMetric], filters: [{ dimension: condition.dimension, operator: 'in', values }],
         start: recommendation.evidence[0]!.request.start, end: recommendation.evidence[0]!.request.end,
         intent: 'summary', limit: 1 }, signal)
-      const value = result.rows[0]?.metrics.purchaser_count?.value
+      const value = result.rows[0]?.metrics[audienceMetric]?.value
       if (value === null || value === undefined || !result.completeness.complete) reasons.push('Aggregate audience estimate is unavailable')
       else estimatedCount = value
     }

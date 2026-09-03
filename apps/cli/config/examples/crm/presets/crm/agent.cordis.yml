@@ -118,6 +118,33 @@
           format: currency
           description: 销售额除以购买人数。
           limitations: [购买人数为零时无法计算。, 原始订单文档唯一性未经确认；重复文档会影响销售额。, 销售额的退款、取消和币种口径未经确认。, 缺失购买者标识的记录不计入人数。]
+        - id: item_sales_amount
+          name: 商品销售额
+          dataset: order_items
+          kind: sum
+          additivity: additive
+          field: amount
+          format: currency
+          description: 商品行宽表中配置金额字段的合计。
+          limitations: [商品行文档不等同于订单；退款、取消和币种口径未经确认。]
+        - id: item_quantity
+          name: 商品件数
+          dataset: order_items
+          kind: sum
+          additivity: additive
+          field: quantity
+          format: number
+          description: 商品行宽表中配置件数字段的合计。
+          limitations: [件数口径和退货处理需由数据所有者确认。]
+        - id: item_purchaser_count
+          name: 商品购买人数
+          dataset: order_items
+          kind: distinct_count
+          additivity: non_additive
+          field: customer
+          format: number
+          description: 商品行宽表中购买者标识的去重计数。
+          limitations: [缺失购买者标识的记录不计入人数；身份口径需确认。]
         - id: repeat_purchase
           name: 复购
           dataset: orders
@@ -242,32 +269,51 @@
           timeGrains: [month]
           description: 订单日期按自然月分组。
           limitations: [日期覆盖范围不证明历史完整。]
+        - id: item_channel
+          name: 商品渠道
+          dataset: order_items
+          field: channel
+          dataType: keyword
+          composition: mutually_exclusive
+          filters: [equals, in]
+          description: 商品行宽表中配置的渠道。
+          limitations: [商品行文档不等同于订单。]
+        - id: item_store
+          name: 商品门店
+          dataset: order_items
+          field: store
+          dataType: keyword
+          composition: overlapping
+          filters: [equals, in]
+          description: 商品行宽表中配置的门店。
+          limitations: [门店规模和营业天数尚未标准化。]
     marketing:
       opportunities:
         - id: channel_optimization
           title: 优化低效渠道
-          dataset: orders
+          dataset: order_items
           comparison: previous_period
-          rule: { kind: decline, metric: sales_amount, dimension: channel, threshold: 0.1 }
-          primaryMetrics: [sales_amount]
-          guardrailMetrics: [atv]
+          rule: { kind: below_average, metric: item_sales_amount, dimension: item_channel, threshold: 0.1 }
+          primaryMetrics: [item_sales_amount]
+          guardrailMetrics: [item_quantity]
           impactWeight: 0.8
           riskWeight: 0.2
-          actionTemplate: 复核下降渠道的商品、客单价与触达策略，形成小范围人工验证方案。
-          audienceConditions: [{ kind: dimension_value, dimension: channel }]
+          actionTemplate: 复核低于同组平均的渠道及商品结构，形成小范围人工验证方案。
+          audienceConditions: [{ kind: dimension_value, dimension: item_channel }]
+          audienceEstimateMetric: item_purchaser_count
           audiencePolicyId: channel_policy
-          limitations: [仅使用汇总订单证据，不代表活动归因或可触达客户。]
+          limitations: [仅使用汇总商品行证据，不代表活动归因或可触达客户。]
         - id: store_improvement
           title: 改善低效门店
-          dataset: orders
+          dataset: order_items
           comparison: previous_period
-          rule: { kind: below_average, metric: sales_amount, dimension: store, threshold: 0.15 }
-          primaryMetrics: [sales_amount]
-          guardrailMetrics: [atv]
+          rule: { kind: below_average, metric: item_sales_amount, dimension: item_store, threshold: 0.15 }
+          primaryMetrics: [item_sales_amount]
+          guardrailMetrics: [item_quantity]
           impactWeight: 0.7
           riskWeight: 0.25
           actionTemplate: 复核低于同组平均的门店，设计门店级人工验证方案。
-          audienceConditions: [{ kind: dimension_value, dimension: store }]
+          audienceConditions: [{ kind: dimension_value, dimension: item_store }]
           limitations: [门店规模与营业天数尚未标准化。]
         - id: atv_growth
           title: 提升客单价
@@ -326,7 +372,7 @@
           source: tag
           key: preferred_channel
           operator: in
-          evidenceDimension: channel
+          evidenceDimension: item_channel
           valueMap: { 门店: STORE, 线上: ONLINE, 小程序: MINI_PROGRAM }
           mandatoryExclusions: [{ source: tag, key: marketing_consent, operator: equals, value: 'false' }]
           maxEstimatedSize: 100000

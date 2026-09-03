@@ -188,9 +188,9 @@ export class CrmMaHttpProvider implements CrmMaService {
           enabled: kind !== 'content' || item.enabled === true,
           ...(kind === 'content' && typeof item.flowNodeId === 'string' && item.flowNodeId.trim()
             ? { flowNodeId: item.flowNodeId } : {}) }
-      })
-    }).filter(item => !needle || `${item.id} ${item.name}`.toLocaleLowerCase().includes(needle))
-    return Object.freeze(rows.slice(0, limit).map(item => Object.freeze(item)))
+      }).filter(item => !needle || `${item.id} ${item.name}`.toLocaleLowerCase().includes(needle)).slice(0, limit)
+    })
+    return Object.freeze(rows.map(item => Object.freeze(item)))
   }
 }
 

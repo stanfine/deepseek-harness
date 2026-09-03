@@ -64,7 +64,8 @@ export const Config = z.object({
     audienceConditions: z.array(z.object({
       kind: z.string().required(), dimension: z.string(), segment: z.string(),
     })).required(),
-    audiencePolicyId: z.string(), requiredConcepts: z.array(z.string()), limitations: z.array(z.string()).required(),
+    audienceEstimateMetric: z.string(), audiencePolicyId: z.string(), requiredConcepts: z.array(z.string()),
+    limitations: z.array(z.string()).required(),
   })).required() }).required(),
   activation: z.object({
     policies: z.array(z.object({ id: z.string().required(), opportunityId: z.string().required(), source: z.string().required(),

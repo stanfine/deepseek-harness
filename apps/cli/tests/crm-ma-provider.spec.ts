@@ -99,6 +99,7 @@ describe('CRM MA HTTP provider', () => {
       { id: 'adhoc', name: 'AdHoc', kind: 'group', enabled: true },
       { id: 'category', name: 'Category', kind: 'category', enabled: true },
       { id: 'welcome', name: 'Welcome', kind: 'content', enabled: true, flowNodeId: 'MESSAGE' },
+      { id: 'off', name: 'Off', kind: 'content', enabled: false, flowNodeId: 'MESSAGE' },
     ])
   })
 })

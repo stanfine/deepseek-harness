@@ -7,7 +7,8 @@ import { evaluateOpportunities } from '../config/examples/crm/opportunity-evalua
 const definition = { id: 'channel_decline', title: 'Optimize channel', dataset: 'orders', comparison: 'previous_period',
   rule: { kind: 'decline', metric: 'sales_amount', dimension: 'channel', threshold: 0.1 }, primaryMetrics: ['sales_amount'],
   guardrailMetrics: ['atv'], impactWeight: 0.8, riskWeight: 0.2, actionTemplate: 'Review the channel.',
-  audienceConditions: [{ kind: 'dimension_value', dimension: 'channel' }], limitations: ['Aggregate evidence only.'] }
+  audienceConditions: [{ kind: 'dimension_value', dimension: 'channel' }], audienceEstimateMetric: 'item_purchaser_count',
+  limitations: ['Aggregate evidence only.'] }
 
 const model = { opportunityCatalog: () => [{ ...definition, available: true }], resolveOpportunity: () => definition }
 const activation = { audienceTag: { id: 'target', code: 'target', name: 'Target', fullName: 'Target' }, exclusionTags: [
@@ -69,9 +70,9 @@ describe('CRM campaign planner', () => {
     let request: unknown
     const plan = await createCampaignPlan(model as never, item, activation as never, async (value) => {
       request = value
-      return { ...evidence(), request: value, rows: [{ dimensions: {}, metrics: { purchaser_count: { value: 42 } } }] } as never
+      return { ...evidence(), request: value, rows: [{ dimensions: {}, metrics: { item_purchaser_count: { value: 42 } } }] } as never
     }, AbortSignal.timeout(100))
-    expect(request).toMatchObject({ metrics: ['purchaser_count'], filters: [
+    expect(request).toMatchObject({ metrics: ['item_purchaser_count'], filters: [
       { dimension: 'channel', operator: 'in', values: ['store'] },
     ] })
     expect(plan).toMatchObject({ version: 1, recommendationId: item.recommendationId, status: 'preview', readyForCreation: true,
