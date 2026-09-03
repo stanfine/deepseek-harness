@@ -29,3 +29,16 @@
         passwordEnv: DSH_CRM_MA_PASSWORD
         timeoutMs: 30000
         maxResponseBytes: 1048576
+    - id: crm-loyalty-provider
+      name: ./loyalty-http-provider.ts
+      config:
+        endpoint: !!js process.env.DSH_CRM_LOYALTY_URL
+        allowHttp: !!js process.env.DSH_CRM_LOYALTY_ALLOW_HTTP === 'true'
+        allowUnauthenticated: !!js process.env.DSH_CRM_LOYALTY_ALLOW_UNAUTHENTICATED === 'true'
+        tenantId: mkt
+        buCode: catering
+        usernameEnv: DSH_CRM_LOYALTY_USERNAME
+        passwordEnv: DSH_CRM_LOYALTY_PASSWORD
+        timeoutMs: 30000
+        maxResponseBytes: 1048576
+        couponTemplateIds: []
