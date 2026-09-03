@@ -17,3 +17,15 @@
         maxFiles: 20
     - id: crm-charts
       name: "@deepseek-ai/dsh-client-ui-crm"
+    - id: crm-ma-provider
+      name: ./ma-http-provider.ts
+      config:
+        endpoint: !!js process.env.DSH_CRM_MA_URL
+        allowHttp: !!js process.env.DSH_CRM_MA_ALLOW_HTTP === 'true'
+        allowUnauthenticated: !!js process.env.DSH_CRM_MA_ALLOW_UNAUTHENTICATED === 'true'
+        tenantId: mkt
+        buCode: catering
+        usernameEnv: DSH_CRM_MA_USERNAME
+        passwordEnv: DSH_CRM_MA_PASSWORD
+        timeoutMs: 30000
+        maxResponseBytes: 1048576
