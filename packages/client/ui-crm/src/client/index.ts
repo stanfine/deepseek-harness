@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { CrmRow } from './CrmRow.tsx'
 import { CrmReportRow } from './CrmReportRow.tsx'
 import { CrmAnalysisRow } from './CrmAnalysisRow.tsx'
+import { CrmCampaignRow } from './CrmCampaignRow.tsx'
 import { en, NS, zh, type CrmKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -31,6 +32,11 @@ export function apply(ctx: Context): void {
   for (const key of ['crm_analyze', 'crm_drilldown']) {
     ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
       { name: 'tool.call.toolview', key, locale: NS }, CrmAnalysisRow,
+    ))
+  }
+  for (const key of ['crm_recommend_opportunities', 'crm_campaign_plan', 'crm_campaign_create_draft', 'crm_campaign_status', 'crm_campaign_results']) {
+    ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
+      { name: 'tool.call.toolview', key, locale: NS }, CrmCampaignRow,
     ))
   }
 }
